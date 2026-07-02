@@ -15,7 +15,7 @@ namespace FDNG
 		constexpr float kArcLaunchSpeed = 90.0f;
 		constexpr float kArcGravity = 220.0f;
 		constexpr float kRadialSpeed = 45.0f;
-		constexpr float kSpiralStep = 12.0f;
+		constexpr float kSpreadStep = 30.0f;  // lateral gap between stacked numbers, game units
 		constexpr float kFadePortion = 0.3f;  // alpha ramps out over the final 30% of life
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
@@ -144,12 +144,22 @@ namespace FDNG
 		n.flags = a_event.flags;
 		n.lifetime = settings->quadLifetimeSeconds * (a_event.flags.critical ? 1.35f : 1.0f);
 
-		// Spiral anti-stacking: successive numbers on the same target step
-		// outward on a golden-angle spiral so rapid hits don't overlap.
-		const float angle = static_cast<float>(victimCount) * 2.399963f;
-		const float radius = kSpiralStep * static_cast<float>(victimCount);
-		n.spiral = { radius * std::cos(angle), radius * std::sin(angle), 0.0f };
-		n.arcDir = { std::cos(angle), std::sin(angle), 0.0f };
+		// Anti-stacking: rapid hits on one target alternate left/right of it
+		// along the player's view axis with a growing step, which separates
+		// them where the player actually sees overlap (screen-horizontal).
+		RE::NiPoint3 right{ 1.0f, 0.0f, 0.0f };
+		if (const auto player = RE::PlayerCharacter::GetSingleton()) {
+			auto toVictim = a_event.anchor - player->GetPosition();
+			toVictim.z = 0.0f;
+			if (const float len = toVictim.Length(); len > 1.0f) {
+				right = { toVictim.y / len, -toVictim.x / len, 0.0f };
+			}
+		}
+		const auto k = static_cast<int>(victimCount);
+		const float side = (k % 2 == 1) ? 1.0f : -1.0f;
+		const float step = k == 0 ? 0.0f : kSpreadStep * static_cast<float>((k + 1) / 2);
+		n.spiral = right * (side * step);
+		n.arcDir = k == 0 ? right : right * side;
 
 		BuildText(n);
 	}
