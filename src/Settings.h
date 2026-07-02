@@ -86,9 +86,9 @@ namespace FDNG
 		std::string fontPath;  // empty = auto (mod override, then Windows bold fonts)
 
 		// [Analytics]
-		bool enableCombatLog{ true };      // master switch for the analytics module
-		bool writeLogToDisk{ true };       // append session reports to FloatingDamageNG-combat.log
-		bool enableLiveDPSWindow{ true };  // small live DPS readout (flat only for now)
+		bool enableCombatLog{ true };       // master switch for the analytics module
+		bool writeLogToDisk{ true };        // append session reports to FloatingDamageNG-combat.log
+		bool enableLiveDPSWindow{ false };  // opt-in: an uninvited second HUD element surprises users
 		bool logFollowerPerformance{ true };
 		float postCombatWindowFadeSeconds{ 5.0f };
 		// Opt-in: registering with devbench exposes combat stats on the port
