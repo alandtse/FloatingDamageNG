@@ -30,8 +30,10 @@ world-anchored 3D numbers in VR and a built-in combat analytics log.
   to a configurable screen spot in first person (flat), anchored ~1 m ahead at
   chest height in VR.
 - Three motion profiles: Float, Arc (parabolic), Radial burst. Big hits render
-  bigger (log-scaled by damage). Crowd control for large fights: follower
-  numbers smaller/dimmer, NPC-vs-NPC dimmer still and distance-culled.
+  bigger (log-scaled by damage). Crowd readability for large fights: the
+  outline color says whose fight it is (your hits black, damage you take red,
+  follower damage blue, bystander fights gray), with follower and NPC-vs-NPC
+  numbers sized down and distance-culled.
 - **Combat analytics** (optional): each fight is logged as a session — per
   combatant damage dealt/taken, healing, crits, time-to-die, who fled — with
   real and active DPS. A small live DPS readout shows during combat (flat),

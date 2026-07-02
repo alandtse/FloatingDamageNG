@@ -13,7 +13,7 @@ In VR the numbers are real 3D billboards at the target's position, rendered thro
 [*][b]Real hit detail:[/b] CRIT / SNEAK / BLOCK from the engine's actual hit flags, and a mitigation subtext that says what happened: 104 (-45 armor), (-30 blocked), (-20 resisted) — sized by how much of the hit was mitigated.
 [*][b]HEADSHOT tags[/b] on projectile hits, read from the engine's impact skeleton node. Works in vanilla; stays accurate under locational-damage mods (an implied x2.5 shows when a hit exceeds its normal baseline).
 [*][b]Numbers follow their target:[/b] a fleeing enemy under Flames carries its counting-up burn total; your self-heal rides along as you move. DoT ticks pool into one live number instead of spam.
-[*][b]Readable in crowds:[/b] rapid hits alternate sides instead of overlapping, follower numbers render smaller/dimmer, NPC-vs-NPC dimmer still and distance-culled. Three motion profiles (Float / Arc / Radial), damage-scaled sizing, real TTF fonts.
+[*][b]Readable in crowds:[/b] rapid hits alternate sides instead of overlapping, the outline color says whose fight it is (your hits black, damage you take red, follower damage blue, bystander fights gray), and follower/NPC numbers render smaller and distance-culled. Three motion profiles (Float / Arc / Radial), damage-scaled sizing, real TTF fonts.
 [*][b]Combat analytics:[/b] every fight logged as a session — per-combatant damage, healing, crits, time-to-die, who fled, real vs active DPS — to a plain-text log (auto-rotated), with an optional in-game stats browser and an optional live DPS readout (off by default).
 [/list][/color]
 
