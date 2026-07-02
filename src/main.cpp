@@ -41,6 +41,13 @@ namespace
 			FDNG::CombatLog::GetSingleton()->Register();
 			FDNG::UI::Register();
 			break;
+		// An open session would be lost on quit-after-save or discarded by a
+		// load; persist it at the last reliable checkpoints.
+		case SKSE::MessagingInterface::kSaveGame:
+		case SKSE::MessagingInterface::kPreLoadGame:
+		case SKSE::MessagingInterface::kNewGame:
+			FDNG::CombatLog::GetSingleton()->Flush();
+			break;
 		default:
 			break;
 		}

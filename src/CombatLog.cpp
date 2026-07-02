@@ -240,6 +240,14 @@ namespace FDNG
 		}
 	}
 
+	void CombatLog::Flush()
+	{
+		std::scoped_lock lk{ _lock };
+		if (_sessionActive) {
+			CloseSession();
+		}
+	}
+
 	void CombatLog::CloseSession()
 	{
 		_sessionActive = false;

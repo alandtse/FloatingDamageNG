@@ -83,6 +83,11 @@ namespace FDNG
 		// player has left combat, and snapshots the live numbers.
 		void Tick();
 
+		// Close and persist any open session immediately (game save, load,
+		// new game) so data isn't lost when the process goes away before the
+		// idle close fires. Main thread only.
+		void Flush();
+
 		LiveStats GetLiveStats();
 
 		RE::BSEventNotifyControl ProcessEvent(const RE::TESCombatEvent* a_event, RE::BSTEventSource<RE::TESCombatEvent>*) override;
