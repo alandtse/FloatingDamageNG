@@ -103,6 +103,22 @@ namespace FDNG::Hooks
 				func(a_this, a_actor, a_value, a_actorValue);
 				--t_inEffectModify;
 				Capture::GetSingleton()->OnEffectModify(a_this, a_actor, a_value, a_actorValue);
+
+				// Dual-value effects (vanilla frost/shock) apply their
+				// secondary AV through a DIRECT call to the base worker inside
+				// DualValueModifierEffect::ModifyActorValue — it bypasses every
+				// vtable, so no hook can see it. This entry fires exactly once
+				// per application, so synthesizing the secondary event here
+				// reproduces the engine's own math (a_value × weight). The
+				// vfunc getters are mandatory: CommonLib's cached
+				// secondaryActorValue/secondaryAVWeight members are mislaid
+				// (this+0x98 holds the weight float; no AV is cached).
+				if (const auto dual = skyrim_cast<RE::DualValueModifierEffect*>(a_this)) {
+					const auto secondaryAV = dual->GetAdditionalActorValue();
+					if (secondaryAV != RE::ActorValue::kNone) {
+						Capture::GetSingleton()->OnEffectModify(a_this, a_actor, a_value * dual->GetSecondaryAVWeight(), secondaryAV);
+					}
+				}
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 
