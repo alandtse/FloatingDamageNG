@@ -185,10 +185,23 @@ namespace FDNG::Renderer
 			}
 
 			// Panel space is finite and busy battles overflow it, so pack in
-			// priority order: the player's own numbers first, then NPC-on-NPC
-			// nearest-first — distant brawls are what overflow drops.
+			// priority order: numbers actually in view first (the HMD-tracked
+			// camera projection, with margin so head motion doesn't pop them),
+			// then the player's own numbers, then NPC-on-NPC nearest-first.
+			// Out-of-view numbers still pack while space remains — they only
+			// lose when something visible needs the room.
+			if (const auto camera = RE::Main::WorldRootCamera()) {
+				for (auto& rn : g_resolved) {
+					float x = 0.0f, y = 0.0f, z = -1.0f;
+					rn.inView = camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) &&
+					            z > 0.0f && x > -0.3f && x < 1.3f && y > -0.3f && y < 1.3f;
+				}
+			}
 			const auto anchorPos = player ? player->GetPosition() : RE::NiPoint3{};
 			std::sort(g_resolved.begin(), g_resolved.end(), [&](const ResolvedNumber& a, const ResolvedNumber& b) {
+				if (a.inView != b.inView) {
+					return a.inView;
+				}
 				const bool aNPC = a.number->origin == OriginTier::kNPC;
 				const bool bNPC = b.number->origin == OriginTier::kNPC;
 				if (aNPC != bNPC) {

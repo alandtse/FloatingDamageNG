@@ -37,6 +37,7 @@ namespace FDNG
 		RE::NiPoint3 worldPos;  // anchor + kinematic offset
 		float scale{ 1.0f };
 		float alpha{ 1.0f };
+		bool inView{ true };  // camera-frustum test, filled by the renderer
 	};
 
 	class NumberManager
