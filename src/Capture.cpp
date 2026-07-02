@@ -58,12 +58,24 @@ namespace FDNG
 			if (!node) {
 				return nullptr;
 			}
+			// Lodged projectiles and equipment attach their own node subtrees
+			// to the skeleton (e.g. "SteelArrowFlight" from a stuck arrow) and
+			// can win "nearest", masking the struck body part.
+			static constexpr std::array kForeignNodes{ "arrow", "bolt", "flight", "weapon", "shield", "quiver" };
 			const RE::NiAVObject* best = nullptr;
 			if (!a_root->name.empty()) {
-				const float d = a_root->world.translate.GetSquaredDistance(a_pos);
-				if (d < a_bestDistSq) {
-					a_bestDistSq = d;
-					best = a_root;
+				const std::string_view name{ a_root->name.c_str() };
+				const bool foreign = std::ranges::any_of(kForeignNodes, [&](const char* w) {
+					return std::ranges::search(name, std::string_view{ w }, [](char a, char b) {
+						return std::tolower(static_cast<unsigned char>(a)) == b;
+					}).begin() != name.end();
+				});
+				if (!foreign) {
+					const float d = a_root->world.translate.GetSquaredDistance(a_pos);
+					if (d < a_bestDistSq) {
+						a_bestDistSq = d;
+						best = a_root;
+					}
 				}
 			}
 			for (const auto& child : node->GetChildren()) {
