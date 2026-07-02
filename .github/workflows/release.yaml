@@ -1,0 +1,135 @@
+# Release pipeline (mirrors the sibling devbench repo): semantic-release reads the
+# Conventional Commit history, picks the next version, bumps `local version` in
+# xmake.lua, commits it back (with [skip ci]), tags vX.Y.Z, and publishes a draft
+# GitHub Release whose body is the curated changelog. Downstream jobs build at the
+# tag, attach the .7z mod archive, promote the release, and â€” on the source repo â€”
+# upload to Nexus with the same changelog.
+#
+# Runs on every push to main (and on manual dispatch): if there are unreleased
+# Conventional commits, semantic-release cuts the next version; otherwise it no-ops
+# and the downstream jobs skip. The bump commit carries [skip ci] so it doesn't
+# re-trigger.
+#
+# Nexus upload is gated on repo variable NEXUS_AUTO_UPLOAD=true (plus secrets
+# UNEX_APIKEY / UNEX_NEXUSMODS_SESSION_COOKIE); when unset it dry-runs (reports only).
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  semantic-release:
+    name: Semantic Release
+    runs-on: ubuntu-latest
+    # Source repo only: forks have no release/Nexus credentials.
+    if: github.repository_owner == 'alandtse'
+    permissions:
+      contents: write # push the bump commit + tag, create the GitHub Release
+    outputs:
+      new_release_published: ${{ steps.semantic.outputs.new_release_published }}
+      new_release_version: ${{ steps.semantic.outputs.new_release_version }}
+      new_release_git_tag: ${{ steps.semantic.outputs.new_release_git_tag }}
+      new_release_notes: ${{ steps.semantic.outputs.new_release_notes }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Semantic Release
+        id: semantic
+        uses: cycjimmy/semantic-release-action@v6
+        with:
+          semantic_version: 24.2.6
+          extra_plugins: |
+            @semantic-release/git
+            @google/semantic-release-replace-plugin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build:
+    name: Build release binaries
+    needs: semantic-release
+    if: needs.semantic-release.outputs.new_release_published == 'true'
+    uses: ./.github/workflows/_build.yaml
+    with:
+      # Build the exact tagged commit so the compiled-in version matches the tag.
+      ref: ${{ needs.semantic-release.outputs.new_release_git_tag }}
+
+  package:
+    name: Package & publish
+    needs: [semantic-release, build]
+    if: needs.semantic-release.outputs.new_release_published == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach the .7z asset and promote the draft release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.semantic-release.outputs.new_release_git_tag }}
+
+      - name: Download binaries
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: bin
+
+      - name: Assemble mod archive
+        id: pkg
+        run: |
+          set -euo pipefail
+          tag="${{ needs.semantic-release.outputs.new_release_git_tag }}"
+          stage="FloatingDamageNG-${tag}"
+          # User archive ships only the plugin; docs/license live in the repo and
+          # the GitHub Release page, and the LGPL client API is consumed via source
+          # (FetchContent), not from the Nexus download.
+          mkdir -p "$stage/SKSE/Plugins"
+          cp bin/FloatingDamageNG.dll bin/FloatingDamageNG.pdb "$stage/SKSE/Plugins/"
+          7z a -t7z -mx=9 "${stage}.7z" "$stage"
+          echo "archive=${stage}.7z" >> "$GITHUB_OUTPUT"
+          echo "Built ${stage}.7z:"
+          7z l "${stage}.7z"
+
+      # semantic-release created the GitHub Release as a draft (changelog body).
+      # Attach the .7z, then promote to published â€” only now that the asset exists,
+      # so a failed build/package leaves a hidden draft instead of a download-less tag.
+      - name: Attach archive and publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.semantic-release.outputs.new_release_git_tag }}
+          ARCHIVE: ${{ steps.pkg.outputs.archive }}
+        run: |
+          gh release upload "$TAG" "$ARCHIVE" --clobber
+          gh release edit "$TAG" --draft=false
+
+  # Upload to Nexus, reusing semantic-release's curated notes as the changelog.
+  # Default is a dry-run (report only). Set repo variable NEXUS_AUTO_UPLOAD=true
+  # (plus the UNEX_* secrets) to upload for real on push-driven releases.
+  nexus:
+    name: Nexus upload
+    needs: [semantic-release, build, package]
+    if: needs.semantic-release.outputs.new_release_published == 'true'
+    uses: ./.github/workflows/nexus-upload.yaml
+    with:
+      tag: ${{ needs.semantic-release.outputs.new_release_git_tag }}
+      dry_run: ${{ vars.NEXUS_AUTO_UPLOAD == 'true' && 'false' || 'true' }}
+      changelog: ${{ needs.semantic-release.outputs.new_release_notes }}
+    secrets:
+      UNEX_NEXUSMODS_SESSION_COOKIE: ${{ secrets.UNEX_NEXUSMODS_SESSION_COOKIE }}
+      UNEX_APIKEY: ${{ secrets.UNEX_APIKEY }}

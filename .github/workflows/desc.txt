@@ -1,0 +1,11 @@
+[size=4][b]FloatingDamageNG[/b][/size]
+
+[size=3][color=#D4D4D8]World-anchored floating damage numbers for Skyrim VR (and flat SE/AE). Numbers spawn as true 3D billboards at the target's position via the [url=https://github.com/alandtse/imgui-vr-helper]ImGuiVRHelper[/url] world-quad API — no flat screen-space overlay in the headset.
+
+* [b]Real damage values:[/b] hooks the engine damage pipeline, so magic, enchantments, DoT ticks, traps, and falls all show true post-mitigation numbers — with crit/sneak/block styling and an optional "(-N resisted)" subtext.
+* [b]Elemental colors:[/b] fire, frost, shock, poison, physical, healing — all configurable.
+* [b]Kinematic profiles:[/b] Float, Arc (WoW-style parabola), or Radial burst.
+* [b]VR-comfortable:[/b] crowd attenuation, distance culling, and logarithmic distance sizing keep dense fights readable.
+* [b]Installation:[/b] Install via MO2 or Vortex like any other SKSE plugin. One universal DLL for SE/AE/VR. VR requires SKSE VR, VR Address Library, and ImGuiVRHelper 1.5+. Config: [i]Data/SKSE/Plugins/FloatingDamageNG.ini[/i].[/color]
+
+[size=3][color=#D4D4D8]Source and documentation on the [url=https://github.com/alandtse/FloatingDamageNG]GitHub Repository[/url].[/color]

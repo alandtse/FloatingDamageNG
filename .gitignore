@@ -1,0 +1,13 @@
+build/
+.xmake/
+.vs/
+.vscode/
+*.user
+*.pdb
+*.dll
+*.exp
+*.lib
+*.obj
+src/Version.h
+.gstack/
+*.code-workspace
