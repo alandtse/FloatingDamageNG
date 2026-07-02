@@ -83,6 +83,28 @@ namespace FDNG
 			fontPath = font;
 		}
 
+		showHitLocation = ini.GetBoolValue("Locational", "bShowHitLocation", showHitLocation);
+		showAmplification = ini.GetBoolValue("Locational", "bShowAmplification", showAmplification);
+		amplificationThreshold = static_cast<float>(ini.GetDoubleValue("Locational", "fAmplificationThreshold", amplificationThreshold));
+		locationTags.clear();
+		for (int i = 1; i <= 8; ++i) {
+			const char* pattern = ini.GetValue("Locational", std::format("sPattern{}", i).c_str());
+			const char* label = ini.GetValue("Locational", std::format("sLabel{}", i).c_str());
+			if (!pattern || !pattern[0] || !label || !label[0]) {
+				continue;
+			}
+			try {
+				locationTags.push_back({ std::regex{ pattern, std::regex::icase }, label });
+			} catch (const std::regex_error&) {
+				logger::warn("Invalid location pattern '{}' ignored.", pattern);
+			}
+		}
+		if (locationTags.empty()) {
+			// Skeleton head nodes are "NPC Head [Head]" on humanoids; most
+			// creature skeletons also carry "Head" in the node name.
+			locationTags.push_back({ std::regex{ ".*head.*", std::regex::icase }, "HEADSHOT" });
+		}
+
 		enableCombatLog = ini.GetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
 		writeLogToDisk = ini.GetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
 		enableLiveDPSWindow = ini.GetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
@@ -121,6 +143,12 @@ namespace FDNG
 		ini.SetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling);
 
 		ini.SetValue("Font", "sFontPath", fontPath.c_str());
+
+		ini.SetBoolValue("Locational", "bShowHitLocation", showHitLocation);
+		ini.SetBoolValue("Locational", "bShowAmplification", showAmplification);
+		ini.SetDoubleValue("Locational", "fAmplificationThreshold", amplificationThreshold);
+		// Patterns are load-only (std::regex can't round-trip its source);
+		// leave whatever the user wrote in place.
 
 		ini.SetLongValue("KinematicProfiles", "iSelectedProfile", std::to_underlying(profile));
 		ini.SetDoubleValue("KinematicProfiles", "fGlobalSpeedMultiplier", globalSpeedMultiplier);

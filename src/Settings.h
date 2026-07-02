@@ -59,6 +59,21 @@ namespace FDNG
 		std::uint32_t colorMagickaDamage{ 0x4169E1 };  // royal blue
 		std::uint32_t colorStaminaDamage{ 0x2E8B57 };  // sea green
 
+		// [Locational] — engine-derived hit location (projectile impact node),
+		// mod-agnostic: works in vanilla and with any locational-damage mod.
+		struct LocationTag
+		{
+			std::regex pattern;  // matched against the struck skeleton node name
+			std::string label;   // e.g. "HEADSHOT"
+		};
+		bool showHitLocation{ true };
+		std::vector<LocationTag> locationTags;  // built in Load(); first match wins
+		// Show the implied external multiplier (e.g. x2.5) when a projectile
+		// hit's totalDamage exceeds its physical+crit baseline — the pattern
+		// locational-damage mods use. Heuristic; projectile hits only.
+		bool showAmplification{ true };
+		float amplificationThreshold{ 1.4f };
+
 		// [Font]
 		std::string fontPath;  // empty = auto (mod override, then Windows bold fonts)
 

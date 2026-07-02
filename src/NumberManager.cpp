@@ -39,8 +39,12 @@ namespace FDNG
 	{
 		const auto rounded = std::max(1, static_cast<int>(std::lround(a_number.amount)));
 		const char* prefix = "";
+		char locPrefix[20]{};
 		if (a_number.kind == DamageKind::kHealing) {
 			prefix = "+";
+		} else if (a_number.location[0] != '\0') {
+			std::snprintf(locPrefix, sizeof(locPrefix), "%s ", a_number.location);
+			prefix = locPrefix;
 		} else if (a_number.flags.critical) {
 			prefix = "CRIT ";
 		} else if (a_number.flags.sneak) {
@@ -51,9 +55,17 @@ namespace FDNG
 		std::snprintf(a_number.text, sizeof(a_number.text), "%s%d", prefix, rounded);
 
 		a_number.subtext[0] = '\0';
-		if (Settings::GetSingleton()->showMitigation && a_number.mitigated >= 1.0f) {
+		const auto settings = Settings::GetSingleton();
+		const bool showMit = settings->showMitigation && a_number.mitigated >= 1.0f;
+		const bool showAmp = a_number.ampMult > 0.0f;
+		if (showMit && showAmp) {
+			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "(-%d resisted) x%.1f",
+				static_cast<int>(std::lround(a_number.mitigated)), a_number.ampMult);
+		} else if (showMit) {
 			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "(-%d resisted)",
 				static_cast<int>(std::lround(a_number.mitigated)));
+		} else if (showAmp) {
+			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "x%.1f", a_number.ampMult);
 		}
 	}
 
@@ -85,7 +97,9 @@ namespace FDNG
 				const float mergeWindow = a_event.kind == DamageKind::kHealing ?
 				                              std::max(settings->dotAccumulationWindow, 0.8f) :
 				                              settings->dotAccumulationWindow;
+				// Crits and locational hits stand alone; only plain numbers merge.
 				if (n.kind == a_event.kind && !n.flags.critical && !a_event.flags.critical &&
+					n.location[0] == '\0' && a_event.location[0] == '\0' &&
 					n.age < mergeWindow) {
 					n.amount += a_event.amount;
 					n.mitigated += a_event.mitigated;
@@ -112,6 +126,8 @@ namespace FDNG
 		n.anchor = a_event.anchor;
 		n.amount = a_event.amount;
 		n.mitigated = a_event.mitigated;
+		n.ampMult = a_event.ampMult;
+		std::memcpy(n.location, a_event.location, sizeof(n.location));
 		n.kind = a_event.kind;
 		n.origin = a_event.origin;
 		n.flags = a_event.flags;

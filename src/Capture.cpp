@@ -164,6 +164,41 @@ namespace FDNG
 		pending.flags.sneak = a_hitData.flags.any(RE::HitData::Flag::kSneakAttack);
 		pending.flags.powerAttack = a_hitData.flags.any(RE::HitData::Flag::kPowerAttack);
 
+		// Projectile hits carry the struck skeleton node, so hit location is
+		// engine data — no locational-damage mod required (and mod-agnostic
+		// when one is installed).
+		const auto settings = Settings::GetSingleton();
+		const auto sourceRef = a_hitData.sourceRef.get();
+		if (const auto projectile = sourceRef ? sourceRef->As<RE::Projectile>() : nullptr) {
+			if (settings->showHitLocation) {
+				auto& impacts = projectile->GetProjectileRuntimeData().impacts;  // BSSimpleList lacks const iteration
+				if (!impacts.empty()) {
+					if (const auto node = (*impacts.begin())->damageRootNode; node && !node->name.empty()) {
+						for (const auto& tag : settings->locationTags) {
+							if (std::regex_match(node->name.c_str(), tag.pattern)) {
+								std::snprintf(pending.location, sizeof(pending.location), "%s", tag.label.c_str());
+								break;
+							}
+						}
+					}
+				}
+			}
+
+			// Locational mods scale totalDamage but not physicalDamage, so a
+			// total exceeding the physical+crit baseline implies an external
+			// multiplier. Heuristic — display styling only.
+			if (settings->showAmplification) {
+				const float critMult = pending.flags.critical ? std::max(a_hitData.criticalDamageMult, 1.0f) : 1.0f;
+				const float baseline = a_hitData.physicalDamage * critMult;
+				if (baseline > 0.1f) {
+					const float amp = a_hitData.totalDamage / baseline;
+					if (amp >= settings->amplificationThreshold) {
+						pending.ampMult = amp;
+					}
+				}
+			}
+		}
+
 		std::scoped_lock lk{ _lock };
 		_pendingHits[target->GetFormID()] = pending;
 	}
@@ -177,21 +212,26 @@ namespace FDNG
 
 		// Weapon-hit path: HandleHealthDamage covers physical blows; magic and
 		// DoT ticks arrive via OnMagicDamage instead. The pending HitData
-		// contributes crit/block/sneak flags and the mitigation subtext.
+		// contributes crit/block/sneak flags, mitigation, hit location, and
+		// the amplification estimate.
 		HitFlags flags;
 		float mitigated = 0.0f;
+		float ampMult = 0.0f;
+		char location[16]{};
 		{
 			std::scoped_lock lk{ _lock };
 			if (const auto it = _pendingHits.find(a_victim->GetFormID());
 				it != _pendingHits.end() && Clock::now() - it->second.stamp < kHitWindow) {
 				flags = it->second.flags;
 				mitigated = it->second.mitigated;
+				ampMult = it->second.ampMult;
+				std::memcpy(location, it->second.location, sizeof(location));
 				_pendingHits.erase(it);
 			}
 		}
 
 		AuditRecord(a_victim->GetFormID(), -amount);
-		EmitDamage(a_victim, a_attacker, amount, DamageKind::kPhysical, flags, mitigated);
+		EmitDamage(a_victim, a_attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location);
 	}
 
 	void Capture::OnResourceDamage(RE::Actor* a_victim, RE::ActorValue a_value, float a_amount)
@@ -370,7 +410,8 @@ namespace FDNG
 		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, 0.0f);
 	}
 
-	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated)
+	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
+		float a_ampMult, const char* a_location)
 	{
 		const auto settings = Settings::GetSingleton();
 		const auto origin = ClassifyOrigin(a_victim, a_attacker);
@@ -383,6 +424,10 @@ namespace FDNG
 		event.anchor = GetAnchorPos(a_victim);
 		event.amount = a_amount;
 		event.mitigated = a_mitigated;
+		event.ampMult = a_ampMult;
+		if (a_location && a_location[0]) {
+			std::snprintf(event.location, sizeof(event.location), "%s", a_location);
+		}
 		event.kind = a_kind;
 		event.origin = origin;
 		event.flags = a_flags;

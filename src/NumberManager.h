@@ -19,11 +19,13 @@ namespace FDNG
 		float lifetime{ 1.5f };
 		float amount{ 0.0f };
 		float mitigated{ 0.0f };
+		float ampMult{ 0.0f };
+		char location[16]{};
 		DamageKind kind{ DamageKind::kPhysical };
 		OriginTier origin{ OriginTier::kNPC };
 		HitFlags flags;
-		char text[24]{};     // "104" / "CRIT 104"
-		char subtext[24]{};  // "(-45 resisted)"
+		char text[28]{};     // "104" / "CRIT 104" / "HEADSHOT 104"
+		char subtext[28]{};  // "(-45 resisted)" / "(-45 resisted) x2.5"
 	};
 
 	// Per-frame, per-number draw parameters resolved by Resolve().
