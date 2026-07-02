@@ -78,7 +78,7 @@ namespace FDNG::Renderer
 			return camera && camera->IsInFirstPerson();
 		}
 
-		// Small live DPS readout (spec §5); lingers for the configured fade
+		// Small live DPS readout; lingers for the configured fade
 		// window after combat ends.
 		void DrawLiveDPSWindow()
 		{
@@ -195,7 +195,7 @@ namespace FDNG::Renderer
 					if (!settings->showFirstPersonNumbers || !player) {
 						continue;
 					}
-					worldPos = firstPersonAnchor + (rn.worldPos - rn.number->anchor);  // keep spiral + kinematic motion
+					worldPos = firstPersonAnchor + (rn.worldPos - rn.number->anchor);  // keep spread + kinematic motion
 				}
 				// Full alpha in the panel; the fade is baked into the text color,
 				// so keep the drawn pixels and the quad in sync by drawing as-is.

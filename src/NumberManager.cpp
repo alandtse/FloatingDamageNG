@@ -19,6 +19,15 @@ namespace FDNG
 		constexpr float kFadePortion = 0.3f;  // alpha ramps out over the final 30% of life
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
+
+		// Crowd attenuation tiers and per-number styling.
+		constexpr float kFollowerScale = 0.70f;
+		constexpr float kFollowerAlpha = 0.60f;
+		constexpr float kNPCScale = 0.45f;
+		constexpr float kNPCAlpha = 0.35f;
+		constexpr float kCritScaleBoost = 1.5f;
+		constexpr float kPopInSeconds = 0.12f;
+		constexpr float kMinMagnitudeScale = 0.6f;
 	}
 
 	NumberManager* NumberManager::GetSingleton()
@@ -37,13 +46,6 @@ namespace FDNG
 
 	void NumberManager::BuildText(Number& a_number) const
 	{
-		// Zero-amount tagged events (RESISTED) show the tag alone.
-		if (a_number.amount < 0.5f && a_number.location[0] != '\0') {
-			std::snprintf(a_number.text, sizeof(a_number.text), "%s", a_number.location);
-			a_number.subtext[0] = '\0';
-			return;
-		}
-
 		const auto rounded = std::max(1, static_cast<int>(std::lround(a_number.amount)));
 		const char* prefix = "";
 		char locPrefix[20]{};
@@ -158,7 +160,7 @@ namespace FDNG
 		const auto k = static_cast<int>(victimCount);
 		const float side = (k % 2 == 1) ? 1.0f : -1.0f;
 		const float step = k == 0 ? 0.0f : kSpreadStep * static_cast<float>((k + 1) / 2);
-		n.spiral = right * (side * step);
+		n.spread = right * (side * step);
 		n.arcDir = k == 0 ? right : right * side;
 
 		BuildText(n);
@@ -241,18 +243,18 @@ namespace FDNG
 				}
 			}
 
-			// Crowd attenuation (spec §3): scale/alpha tiers by who dealt the
+			// Crowd attenuation: scale/alpha tiers by who dealt the
 			// damage, with NPC-on-NPC culled entirely beyond the radius.
 			float scaleMult = 1.0f;
 			float alphaMult = 1.0f;
 			switch (n.origin) {
 			case OriginTier::kFollower:
-				scaleMult = 0.70f;
-				alphaMult = 0.60f;
+				scaleMult = kFollowerScale;
+				alphaMult = kFollowerAlpha;
 				break;
 			case OriginTier::kNPC:
-				scaleMult = 0.45f;
-				alphaMult = 0.35f;
+				scaleMult = kNPCScale;
+				alphaMult = kNPCAlpha;
 				if (playerPos.GetSquaredDistance(n.anchor) > maxRadiusSq) {
 					continue;
 				}
@@ -262,24 +264,24 @@ namespace FDNG
 			}
 
 			if (n.flags.critical) {
-				scaleMult *= 1.5f;
+				scaleMult *= kCritScaleBoost;
 			}
 
-			// Pop-in over the first 120 ms, fade-out over the last 30% of life.
+			// Pop-in at spawn, fade-out over the final portion of life.
 			const float tn = n.age / n.lifetime;
-			scaleMult *= 0.6f + 0.4f * std::min(n.age / 0.12f, 1.0f);
+			scaleMult *= 0.6f + 0.4f * std::min(n.age / kPopInSeconds, 1.0f);
 			const float fade = (1.0f - tn) / kFadePortion;
 			alphaMult *= std::clamp(fade, 0.0f, 1.0f);
 
-			// Spec §2 sizing curve: FinalScale = clamp(Base + log10(dmg)·Mod, min, ceiling)
+			// Sizing curve: FinalScale = clamp(Base + log10(dmg)·Mod, min, ceiling)
 			// — big hits read bigger, chip damage stays small.
 			const float magnitudeScale = std::clamp(
 				settings->baseFontScale + std::log10(std::max(n.amount, 1.0f)) * settings->logScaleModifier,
-				0.6f, settings->maxFontScaleCeiling);
+				kMinMagnitudeScale, settings->maxFontScaleCeiling);
 
 			ResolvedNumber resolved;
 			resolved.number = &n;
-			resolved.worldPos = n.anchor + n.spiral + KinematicOffset(n);
+			resolved.worldPos = n.anchor + n.spread + KinematicOffset(n);
 			resolved.scale = scaleMult * magnitudeScale;
 			resolved.alpha = alphaMult;
 			a_out.push_back(resolved);

@@ -18,6 +18,7 @@
 #include <SKSE/SKSE.h>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <deque>
@@ -144,17 +145,9 @@ namespace FDNG::UI
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Colors", 0)) {
-				ColorRow("Physical", s->colorPhysical);
-				ColorRow("Critical", s->colorCritical);
-				ColorRow("Blocked", s->colorBlocked);
-				ColorRow("Fire", s->colorFire);
-				ColorRow("Frost", s->colorFrost);
-				ColorRow("Shock", s->colorShock);
-				ColorRow("Poison", s->colorPoison);
-				ColorRow("Magic (untyped)", s->colorMagic);
-				ColorRow("Healing", s->colorHealing);
-				ColorRow("Magicka damage", s->colorMagickaDamage);
-				ColorRow("Stamina damage", s->colorStaminaDamage);
+				for (const auto& def : kColorTable) {
+					ColorRow(def.uiLabel, s->*def.field);
+				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Analytics", 0)) {

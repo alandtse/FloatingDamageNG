@@ -99,4 +99,27 @@ namespace FDNG
 		bool debugLog{ false };
 		bool deltaAudit{ false };  // 1 Hz health-delta vs captured-events comparison
 	};
+
+	// Single source of truth for the color set: INI load/save and the UI
+	// pickers iterate this table, so adding a color touches only Settings.h
+	// (plus whatever maps a kind to it in the renderer).
+	struct ColorDef
+	{
+		const char* iniKey;
+		const char* uiLabel;
+		std::uint32_t Settings::* field;
+	};
+	inline constexpr std::array<ColorDef, 11> kColorTable{ {
+		{ "sPhysical", "Physical", &Settings::colorPhysical },
+		{ "sCritical", "Critical", &Settings::colorCritical },
+		{ "sBlocked", "Blocked", &Settings::colorBlocked },
+		{ "sFire", "Fire", &Settings::colorFire },
+		{ "sFrost", "Frost", &Settings::colorFrost },
+		{ "sShock", "Shock", &Settings::colorShock },
+		{ "sPoison", "Poison", &Settings::colorPoison },
+		{ "sMagic", "Magic (untyped)", &Settings::colorMagic },
+		{ "sHealing", "Healing", &Settings::colorHealing },
+		{ "sMagickaDamage", "Magicka damage", &Settings::colorMagickaDamage },
+		{ "sStaminaDamage", "Stamina damage", &Settings::colorStaminaDamage },
+	} };
 }

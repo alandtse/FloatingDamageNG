@@ -226,8 +226,9 @@ namespace FDNG
 			}
 		}
 
-		// 1 Hz DPS timeline sample for the stats page graph.
-		if (_dpsSamples.size() < 900) {
+		// 1 Hz DPS timeline sample for the stats page graph (capped: 15 min).
+		constexpr std::size_t kMaxDpsSamples = 900;
+		if (_dpsSamples.size() < kMaxDpsSamples) {
 			_dpsSamples.push_back(_playerDamage - _lastSampleDamage);
 			_lastSampleDamage = _playerDamage;
 		}
@@ -278,7 +279,7 @@ namespace FDNG
 			cs.isFollower = c.isFollower;
 			cs.isHostileToPlayer = c.isHostileToPlayer;
 			cs.died = c.diedAt >= 0.0f;
-			cs.fled = !cs.died && c.isHostileToPlayer && c.damageTaken > 0.0f;  // spec §5: threat cleared with health > 0
+			cs.fled = !cs.died && c.isHostileToPlayer && c.damageTaken > 0.0f;  // threat cleared with health still above zero
 			cs.damageDealt = c.damageDealt;
 			cs.damageTaken = c.damageTaken;
 			cs.healingReceived = c.healingReceived;
@@ -293,42 +294,7 @@ namespace FDNG
 			[](const auto& a, const auto& b) { return a.damageDealt > b.damageDealt; });
 
 		if (settings->writeLogToDisk) {
-			// Rotate once past the cap so a long-running install never grows
-			// an unbounded file; one .old generation is kept.
-			constexpr std::uintmax_t kMaxLogBytes = 5ull * 1024 * 1024;
-			const auto path = LogPath();
-			std::error_code ec;
-			if (std::filesystem::file_size(path, ec) > kMaxLogBytes && !ec) {
-				auto old = path;
-				old += ".old";
-				std::filesystem::remove(old, ec);
-				std::filesystem::rename(path, old, ec);
-			}
-
-			std::ofstream out(path, std::ios::app);
-			if (out) {
-				out << std::format("=== Session #{} — {} @ {} — {:.1f}s ===\n", summary.index, summary.startedAt, summary.location, summary.duration);
-				out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active, peak {:.0f})\n",
-					summary.playerDamage, summary.realDPS, summary.activeDPS, _playerActiveSeconds, summary.peakDPS);
-				for (const auto& c : summary.combatants) {
-					std::string fate;
-					if (c.died) {
-						fate = c.timeToDie >= 0.0f ? std::format(" — died (TTD {:.1f}s)", c.timeToDie) : " — died";
-					} else if (c.fled) {
-						fate = " — survived/fled";
-					}
-					out << std::format("  {}{} — dealt {:.0f} ({} hits, {} crit{}), taken {:.0f}{}{}\n",
-						c.name,
-						c.isFollower ? " (follower)" : (c.isHostileToPlayer ? " (hostile)" : ""),
-						c.damageDealt, c.hitsDealt, c.critsDealt, c.critsDealt == 1 ? "" : "s",
-						c.damageTaken,
-						c.healingReceived > 0.0f ? std::format(", healed +{:.0f}", c.healingReceived) : "",
-						fate);
-				}
-				out << '\n';
-			} else {
-				logger::warn("Could not open combat log file for writing.");
-			}
+			WriteDiskReport(summary);
 		}
 
 		DevBench::NotifySessionEnded(summary);
@@ -337,6 +303,46 @@ namespace FDNG
 		while (_history.size() > kHistoryCapacity) {
 			_history.pop_front();
 		}
+	}
+
+	void CombatLog::WriteDiskReport(const SessionSummary& a_summary)
+	{
+		// Rotate once past the cap so a long-running install never grows
+		// an unbounded file; one .old generation is kept.
+		constexpr std::uintmax_t kMaxLogBytes = 5ull * 1024 * 1024;
+		const auto path = LogPath();
+		std::error_code ec;
+		if (std::filesystem::file_size(path, ec) > kMaxLogBytes && !ec) {
+			auto old = path;
+			old += ".old";
+			std::filesystem::remove(old, ec);
+			std::filesystem::rename(path, old, ec);
+		}
+
+		std::ofstream out(path, std::ios::app);
+		if (!out) {
+			logger::warn("Could not open combat log file for writing.");
+			return;
+		}
+		out << std::format("=== Session #{} — {} @ {} — {:.1f}s ===\n", a_summary.index, a_summary.startedAt, a_summary.location, a_summary.duration);
+		out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active, peak {:.0f})\n",
+			a_summary.playerDamage, a_summary.realDPS, a_summary.activeDPS, _playerActiveSeconds, a_summary.peakDPS);
+		for (const auto& c : a_summary.combatants) {
+			std::string fate;
+			if (c.died) {
+				fate = c.timeToDie >= 0.0f ? std::format(" — died (TTD {:.1f}s)", c.timeToDie) : " — died";
+			} else if (c.fled) {
+				fate = " — survived/fled";
+			}
+			out << std::format("  {}{} — dealt {:.0f} ({} hits, {} crit{}), taken {:.0f}{}{}\n",
+				c.name,
+				c.isFollower ? " (follower)" : (c.isHostileToPlayer ? " (hostile)" : ""),
+				c.damageDealt, c.hitsDealt, c.critsDealt, c.critsDealt == 1 ? "" : "s",
+				c.damageTaken,
+				c.healingReceived > 0.0f ? std::format(", healed +{:.0f}", c.healingReceived) : "",
+				fate);
+		}
+		out << '\n';
 	}
 
 	std::vector<CombatLog::SessionSummary> CombatLog::GetHistory()

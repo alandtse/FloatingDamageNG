@@ -7,7 +7,7 @@
 
 namespace FDNG
 {
-	// Combat analytics (spec §5, VR-CALM). Sessions open on combat (any
+	// Combat analytics. Sessions open on combat (any
 	// participant, not just the player) and close once the player is out of
 	// combat AND damage has stopped flowing; per-combatant damage, healing,
 	// crits, time-to-die, and fled state accumulate in between. Session
@@ -107,6 +107,7 @@ namespace FDNG
 
 		void EnsureSession(RE::Actor* a_hint);
 		void CloseSession();
+		void WriteDiskReport(const SessionSummary& a_summary);
 
 		Combatant& GetCombatant(RE::Actor* a_actor);
 		float SessionSeconds() const;

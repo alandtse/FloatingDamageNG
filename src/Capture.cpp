@@ -211,6 +211,18 @@ namespace FDNG
 		}
 	}
 
+	bool Capture::FindRecentMagic(RE::FormID a_victimID, DamageKind& a_kindOut, RE::Actor*& a_attackerOut)
+	{
+		std::scoped_lock lk{ _lock };
+		const auto it = _recentMagic.find(a_victimID);
+		if (it == _recentMagic.end() || Clock::now() - it->second.stamp >= kMagicWindow) {
+			return false;
+		}
+		a_kindOut = it->second.kind;
+		a_attackerOut = it->second.casterID != 0 ? RE::TESForm::LookupByID<RE::Actor>(it->second.casterID) : nullptr;
+		return true;
+	}
+
 	void Capture::OnHealthDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_damage)
 	{
 		if (!a_victim || a_damage >= 0.0f) {
@@ -263,8 +275,6 @@ namespace FDNG
 
 	void Capture::OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue)
 	{
-		// Zero-amount applications stay queued: a hostile health effect that
-		// applies for zero is a fully-resisted hit worth a "RESISTED" tag.
 		if (!a_effect || !a_target) {
 			return;
 		}
@@ -374,7 +384,8 @@ namespace FDNG
 		// engine's contact point, matched against the configured patterns.
 		const auto settings = Settings::GetSingleton();
 		if (ranged && settings->showHitLocation && a_victim->Is3DLoaded()) {
-			float bestDistSq = 55.0f * 55.0f;  // reject contact points far off the skeleton
+			constexpr float kNodeSearchRadius = 55.0f;  // reject contact points farther off the skeleton, game units
+			float bestDistSq = kNodeSearchRadius * kNodeSearchRadius;
 			if (const auto node = FindClosestNode(a_victim->Get3D(), hitPos, bestDistSq)) {
 				if (settings->debugLog) {
 					logger::debug("Hit location: node='{}' dist={:.1f}", node->name.c_str(), std::sqrt(bestDistSq));
@@ -405,16 +416,7 @@ namespace FDNG
 		// exact attribution).
 		DamageKind kind = DamageKind::kPhysical;
 		RE::Actor* attacker = nullptr;
-		{
-			std::scoped_lock lk{ _lock };
-			if (const auto it = _recentMagic.find(a_raw.victimID);
-				it != _recentMagic.end() && Clock::now() - it->second.stamp < kMagicWindow) {
-				kind = it->second.kind;
-				if (it->second.casterID != 0) {
-					attacker = RE::TESForm::LookupByID<RE::Actor>(it->second.casterID);
-				}
-			}
-		}
+		FindRecentMagic(a_raw.victimID, kind, attacker);
 
 		AuditRecord(a_raw.victimID, a_raw.amount);
 		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind);
@@ -474,14 +476,9 @@ namespace FDNG
 	{
 		// Hostile attribution is mandatory: the caster's own spell costs,
 		// sprinting, and power attacks arrive as identical deltas.
+		DamageKind ignored = DamageKind::kMagic;
 		RE::Actor* attacker = nullptr;
-		{
-			std::scoped_lock lk{ _lock };
-			if (const auto it = _recentMagic.find(a_raw.victimID);
-				it != _recentMagic.end() && Clock::now() - it->second.stamp < kMagicWindow && it->second.casterID != 0) {
-				attacker = RE::TESForm::LookupByID<RE::Actor>(it->second.casterID);
-			}
-		}
+		FindRecentMagic(a_raw.victimID, ignored, attacker);
 		if (!attacker || attacker == a_victim) {
 			return;
 		}
@@ -510,29 +507,15 @@ namespace FDNG
 
 		AuditRecord(a_target->GetFormID(), a_amount);
 
-		// Accumulate ticks: healing effects apply per frame in sub-point
-		// deltas. Only a stream that clears the threshold within the window is
-		// a real heal; natural regen never gets there and silently expires.
-		const auto now = Clock::now();
+		// Pool heal ticks until they clear the regen-noise threshold.
 		float emit = 0.0f;
+		float ignoredMitigated = 0.0f;
 		{
 			std::scoped_lock lk{ _lock };
-			auto& accum = _healAccums[a_target->GetFormID()];
-			if (accum.amount == 0.0f || now - accum.windowStart > kHealWindow) {
-				accum.windowStart = now;
-				accum.amount = 0.0f;
+			if (!_tickAccums[PoolKey(a_target->GetFormID(), DamageKind::kHealing)].Accumulate(
+					Clock::now(), a_amount, 0.0f, settings->minHealToShow, kHealWindow, emit, ignoredMitigated)) {
+				return;
 			}
-			accum.amount += a_amount;
-			if (accum.amount >= settings->minHealToShow) {
-				emit = accum.amount;
-				// Keep the window open so the ongoing stream merges into the
-				// same on-screen number via the DoT accumulator.
-				accum.amount = 0.0f;
-				accum.windowStart = now;
-			}
-		}
-		if (emit <= 0.0f) {
-			return;
 		}
 
 		CombatLog::GetSingleton()->RecordHeal(a_target, emit);
@@ -561,26 +544,11 @@ namespace FDNG
 		float emit = a_amount;
 		float emitMitigated = a_mitigated;
 		if (a_amount < settings->minDamageToShow) {
-			const auto now = Clock::now();
-			const auto key = static_cast<std::uint64_t>(a_victim->GetFormID()) |
-			                 (static_cast<std::uint64_t>(std::to_underlying(a_kind)) << 32);
 			std::scoped_lock lk{ _lock };
-			auto& accum = _tickAccums[key];
-			if (accum.amount == 0.0f || now - accum.windowStart > kMagicWindow) {
-				accum.windowStart = now;
-				accum.amount = 0.0f;
-				accum.mitigated = 0.0f;
-			}
-			accum.amount += a_amount;
-			accum.mitigated += a_mitigated;
-			if (accum.amount < settings->minDamageToShow) {
+			if (!_tickAccums[PoolKey(a_victim->GetFormID(), a_kind)].Accumulate(
+					Clock::now(), a_amount, a_mitigated, settings->minDamageToShow, kMagicWindow, emit, emitMitigated)) {
 				return;
 			}
-			emit = accum.amount;
-			emitMitigated = accum.mitigated;
-			accum.amount = 0.0f;
-			accum.mitigated = 0.0f;
-			accum.windowStart = now;
 		}
 
 		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, emitMitigated);

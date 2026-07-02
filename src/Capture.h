@@ -134,24 +134,57 @@ namespace FDNG
 			RE::FormID casterID{ 0 };
 		};
 
-		struct HealAccum
-		{
-			Clock::time_point windowStart;
-			float amount{ 0.0f };
-		};
-
-		// Sub-threshold tick pool: concentration spells apply health damage in
-		// sub-point per-frame deltas; pool them until they are worth a number.
+		// Sub-threshold tick pool: concentration effects apply in sub-point
+		// per-frame deltas (damage and healing alike); pool them until they
+		// are worth a number. Stale pools reset rather than emit, which is
+		// also what silences natural regen (it never clears the threshold
+		// within a window).
 		struct TickAccum
 		{
 			Clock::time_point windowStart;
 			float amount{ 0.0f };
 			float mitigated{ 0.0f };
+
+			// Returns true once the pooled total clears the threshold, with
+			// the totals in the out-params; the pool resets but the window
+			// stays open so an ongoing stream keeps merging.
+			bool Accumulate(Clock::time_point a_now, float a_amount, float a_mitigated,
+				float a_threshold, std::chrono::milliseconds a_window,
+				float& a_outAmount, float& a_outMitigated)
+			{
+				if (amount == 0.0f || a_now - windowStart > a_window) {
+					windowStart = a_now;
+					amount = 0.0f;
+					mitigated = 0.0f;
+				}
+				amount += a_amount;
+				mitigated += a_mitigated;
+				if (amount < a_threshold) {
+					return false;
+				}
+				a_outAmount = amount;
+				a_outMitigated = mitigated;
+				amount = 0.0f;
+				mitigated = 0.0f;
+				windowStart = a_now;
+				return true;
+			}
 		};
 
 		static DamageKind ClassifyMagicKind(const RE::EffectSetting* a_mgef);
 
 		void QueueRaw(const RawEvent& a_event);
+
+		// Pool key: one accumulator per victim and damage kind.
+		static std::uint64_t PoolKey(RE::FormID a_victimID, DamageKind a_kind)
+		{
+			return static_cast<std::uint64_t>(a_victimID) | (static_cast<std::uint64_t>(std::to_underlying(a_kind)) << 32);
+		}
+
+		// Fresh-entry lookup in the recent hostile-apply map. Returns true
+		// when an unexpired entry exists; outputs its kind and resolved
+		// caster (null when the apply had none).
+		bool FindRecentMagic(RE::FormID a_victimID, DamageKind& a_kindOut, RE::Actor*& a_attackerOut);
 
 		// Main-thread processing per source.
 		void ProcessWeaponHit(const RawEvent& a_raw, RE::Actor* a_victim);
@@ -188,8 +221,7 @@ namespace FDNG
 		std::mutex _lock;  // guards the maps below (event sink writes off-main)
 		std::unordered_map<RE::FormID, PendingHit> _pendingHits;
 		std::unordered_map<RE::FormID, RecentMagic> _recentMagic;
-		std::unordered_map<RE::FormID, HealAccum> _healAccums;
-		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;  // key: victimID | kind<<32
+		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;  // keyed by PoolKey (healing included)
 
 		// Audit state (bDeltaAudit only; main thread)
 		struct AuditEntry

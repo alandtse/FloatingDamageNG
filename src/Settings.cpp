@@ -28,6 +28,13 @@ namespace FDNG
 			const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), value, 16);
 			return ec == std::errc() ? value : a_default;
 		}
+
+		void AddDefaultLocationTag(Settings& a_settings)
+		{
+			// Skeleton head nodes are "NPC Head [Head]" on humanoids; most
+			// creature skeletons also carry "Head" in the node name.
+			a_settings.locationTags.push_back({ std::regex{ ".*head.*", std::regex::icase }, "HEADSHOT" });
+		}
 	}
 
 	Settings* Settings::GetSingleton()
@@ -68,17 +75,9 @@ namespace FDNG
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
 
-		colorPhysical = GetHexColor(ini, "Colors", "sPhysical", colorPhysical);
-		colorCritical = GetHexColor(ini, "Colors", "sCritical", colorCritical);
-		colorBlocked = GetHexColor(ini, "Colors", "sBlocked", colorBlocked);
-		colorFire = GetHexColor(ini, "Colors", "sFire", colorFire);
-		colorFrost = GetHexColor(ini, "Colors", "sFrost", colorFrost);
-		colorShock = GetHexColor(ini, "Colors", "sShock", colorShock);
-		colorPoison = GetHexColor(ini, "Colors", "sPoison", colorPoison);
-		colorMagic = GetHexColor(ini, "Colors", "sMagic", colorMagic);
-		colorHealing = GetHexColor(ini, "Colors", "sHealing", colorHealing);
-		colorMagickaDamage = GetHexColor(ini, "Colors", "sMagickaDamage", colorMagickaDamage);
-		colorStaminaDamage = GetHexColor(ini, "Colors", "sStaminaDamage", colorStaminaDamage);
+		for (const auto& def : kColorTable) {
+			this->*def.field = GetHexColor(ini, "Colors", def.iniKey, this->*def.field);
+		}
 
 		if (const char* font = ini.GetValue("Font", "sFontPath"); font && font[0] != '\0') {
 			fontPath = font;
@@ -105,9 +104,7 @@ namespace FDNG
 			}
 		}
 		if (locationTags.empty()) {
-			// Skeleton head nodes are "NPC Head [Head]" on humanoids; most
-			// creature skeletons also carry "Head" in the node name.
-			locationTags.push_back({ std::regex{ ".*head.*", std::regex::icase }, "HEADSHOT" });
+			AddDefaultLocationTag(*this);
 		}
 
 		enableCombatLog = ini.GetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
@@ -134,7 +131,7 @@ namespace FDNG
 	void Settings::ResetToDefaults()
 	{
 		*this = Settings{};
-		locationTags.push_back({ std::regex{ ".*head.*", std::regex::icase }, "HEADSHOT" });
+		AddDefaultLocationTag(*this);
 		if (const auto log = spdlog::default_logger()) {
 			log->set_level(spdlog::level::info);
 			log->flush_on(spdlog::level::info);
@@ -147,9 +144,9 @@ namespace FDNG
 		ini.SetUnicode();
 		ini.LoadFile(kIniPath);  // keep unknown keys/comments where possible
 
-		const auto setHex = [&](const char* key, std::uint32_t value) {
-			ini.SetValue("Colors", key, std::format("0x{:06X}", value).c_str());
-		};
+		for (const auto& def : kColorTable) {
+			ini.SetValue("Colors", def.iniKey, std::format("0x{:06X}", this->*def.field).c_str());
+		}
 
 		ini.SetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
 		ini.SetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
@@ -185,18 +182,6 @@ namespace FDNG
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
 		ini.SetDoubleValue("Behavior", "fMinHealToShow", minHealToShow);
 		ini.SetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow);
-
-		setHex("sPhysical", colorPhysical);
-		setHex("sCritical", colorCritical);
-		setHex("sBlocked", colorBlocked);
-		setHex("sFire", colorFire);
-		setHex("sFrost", colorFrost);
-		setHex("sShock", colorShock);
-		setHex("sPoison", colorPoison);
-		setHex("sMagic", colorMagic);
-		setHex("sHealing", colorHealing);
-		setHex("sMagickaDamage", colorMagickaDamage);
-		setHex("sStaminaDamage", colorStaminaDamage);
 
 		ini.SetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
 		ini.SetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
