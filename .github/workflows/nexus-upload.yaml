@@ -25,11 +25,11 @@ on:
       nexus_mod_id:
         description: "FloatingDamageNG Nexus mod ID."
         required: false
-        default: "183466"
+        default: "184159"
       mod_filename:
         description: "Nexus file name (without extension)."
         required: false
-        default: "ImGui VR Helper"
+        default: "FloatingDamageNG"
       dry_run:
         description: "If true, only report the planned upload; never upload."
         required: false
@@ -51,11 +51,11 @@ on:
       nexus_mod_id:
         required: false
         type: string
-        default: "183466"
+        default: "184159"
       mod_filename:
         required: false
         type: string
-        default: "ImGui VR Helper"
+        default: "FloatingDamageNG"
       dry_run:
         required: false
         type: string

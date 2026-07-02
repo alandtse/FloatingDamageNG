@@ -1,0 +1,23 @@
+name: Feature request
+description: Something the numbers, analytics, or config should do
+labels: [enhancement]
+body:
+  - type: textarea
+    id: request
+    attributes:
+      label: What should it do
+      description: Describe the behavior you want and when it would show.
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / what problem it solves
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Where does it matter to you
+      options:
+        - Flat (SE/AE)
+        - VR
+        - Both

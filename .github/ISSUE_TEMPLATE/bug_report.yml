@@ -1,0 +1,54 @@
+name: Bug report
+description: Something crashed, misbehaved, or a number is wrong/missing
+labels: [bug]
+body:
+  - type: dropdown
+    id: runtime
+    attributes:
+      label: Game runtime
+      options:
+        - Skyrim SE (1.5.97)
+        - Skyrim AE (1.6.x)
+        - Skyrim VR (1.4.15)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: FloatingDamageNG version
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: >
+        What you did, what you expected, what you saw. For a wrong/missing
+        number, say what dealt the damage (weapon / spell / enchant / poison)
+        and to whom.
+    validations:
+      required: true
+  - type: textarea
+    id: pluginlog
+    attributes:
+      label: FloatingDamageNG.log
+      description: >
+        From `Documents/My Games/<game>/SKSE/`. For missing-number reports,
+        set `bDebugLog=true` under `[Debug]` in the INI first, reproduce, and
+        paste the `Raw:` lines from around the moment — they show exactly what
+        the hooks captured.
+      render: text
+  - type: textarea
+    id: crashlog
+    attributes:
+      label: Crash log (if it crashed)
+      description: >
+        The matching `crash-*.log` from CrashLoggerSSE / Trainwreck, same
+        folder. Paste the whole file or attach it.
+      render: text
+  - type: input
+    id: mods
+    attributes:
+      label: Related mods
+      description: Other HUD/overlay mods, locational-damage mods, combat overhauls in your load order.
