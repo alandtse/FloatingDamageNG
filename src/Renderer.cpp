@@ -112,26 +112,46 @@ namespace FDNG::Renderer
 			ImGui::PopStyleVar();
 		}
 
-		// Outline color encodes who's involved (established relationship
-		// palette: incoming red, ally blue, unrelated gray) — the fill hue is
-		// reserved for the damage kind, so origin must not repurpose it.
-		ImU32 OutlineColor(OriginTier a_origin, std::uint8_t a_alpha)
+		// The origin marker color encodes who's involved (relationship
+		// palette; user-themable) — the fill hue is reserved for the damage
+		// kind, so origin must not repurpose it.
+		ImU32 RgbWithAlpha(std::uint32_t a_rgb, std::uint8_t a_alpha)
 		{
+			return IM_COL32((a_rgb >> 16) & 0xFF, (a_rgb >> 8) & 0xFF, a_rgb & 0xFF, a_alpha);
+		}
+
+		ImU32 OriginColor(OriginTier a_origin, std::uint8_t a_alpha)
+		{
+			const auto settings = Settings::GetSingleton();
 			switch (a_origin) {
 			case OriginTier::kPlayerVictim:
-				return IM_COL32(140, 20, 20, a_alpha);  // damage you take: red
+				return RgbWithAlpha(settings->colorOriginTaken, a_alpha);
 			case OriginTier::kFollower:
-				return IM_COL32(25, 80, 140, a_alpha);  // your allies: blue
+				return RgbWithAlpha(settings->colorOriginFollower, a_alpha);
 			case OriginTier::kNPC:
-				return IM_COL32(60, 60, 60, a_alpha);  // bystander fights: soft gray
+				return RgbWithAlpha(settings->colorOriginNPC, a_alpha);
 			default:
-				return IM_COL32(0, 0, 0, a_alpha);  // your hits: crisp black
+				return RgbWithAlpha(settings->colorOriginPlayer, a_alpha);
 			}
 		}
 
-		void AddOutlinedText(ImDrawList* a_drawList, ImFont* a_font, float a_size, ImVec2 a_pos, ImU32 a_color, ImU32 a_outline, const char* a_text)
+		// Text with an 8-direction outline ring; a_thickness 0 degrades to a
+		// plain drop shadow.
+		void AddOutlinedText(ImDrawList* a_drawList, ImFont* a_font, float a_size, ImVec2 a_pos, ImU32 a_color, ImU32 a_outline, float a_thickness, const char* a_text)
 		{
-			a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + 2.0f, a_pos.y + 2.0f), a_outline, a_text);
+			if (a_thickness > 0.0f) {
+				const float t = a_thickness;
+				constexpr float kDiag = 0.7071f;
+				const ImVec2 offsets[] = {
+					{ t, 0.0f }, { -t, 0.0f }, { 0.0f, t }, { 0.0f, -t },
+					{ t * kDiag, t * kDiag }, { -t * kDiag, t * kDiag }, { t * kDiag, -t * kDiag }, { -t * kDiag, -t * kDiag }
+				};
+				for (const auto& o : offsets) {
+					a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + o.x, a_pos.y + o.y), a_outline, a_text);
+				}
+			} else {
+				a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + 2.0f, a_pos.y + 2.0f), a_outline, a_text);
+			}
 			a_drawList->AddText(a_font, a_size, a_pos, a_color, a_text);
 		}
 
@@ -160,18 +180,51 @@ namespace FDNG::Renderer
 				blockSz.y += subSz.y;
 			}
 
+			const auto settings = Settings::GetSingleton();
 			const auto alpha = static_cast<std::uint8_t>(std::clamp(a_rn.alpha, 0.0f, 1.0f) * 255.0f);
 			const ImU32 color = KindColor(n, a_rn.alpha);
-			const ImU32 outline = OutlineColor(n.origin, alpha);
+			const ImU32 origin = OriginColor(n.origin, alpha);
+			const float thickness = settings->styleThickness;
+
+			// kOutline: the origin color IS the text outline. Underline/box
+			// keep a thin black outline for legibility and draw the origin
+			// marker as a separate shape. The marker must stay inside the
+			// returned extent — in VR anything outside it falls off the quad.
+			const bool outlineStyle = settings->originStyle == OriginStyle::kOutline;
+			const ImU32 textOutline = outlineStyle ? origin : IM_COL32(0, 0, 0, alpha);
+			const float textThickness = outlineStyle ? thickness : 1.0f;
+			const float padX = settings->originStyle == OriginStyle::kBox ? 4.0f + thickness : 0.0f;
+			const float padTop = settings->originStyle == OriginStyle::kBox ? 3.0f + thickness : 0.0f;
+			const float padBottom = settings->originStyle == OriginStyle::kBox       ? 3.0f + thickness :
+			                        settings->originStyle == OriginStyle::kUnderline ? 2.0f + thickness :
+			                                                                           0.0f;
+			const ImVec2 content{ a_topLeft.x + padX, a_topLeft.y + padTop };
+
 			AddOutlinedText(a_drawList, font, mainPx,
-				ImVec2(a_topLeft.x + (blockSz.x - mainSz.x) * 0.5f, a_topLeft.y), color, outline, n.text);
+				ImVec2(content.x + (blockSz.x - mainSz.x) * 0.5f, content.y), color, textOutline, textThickness, n.text);
 			if (n.subtext[0] != '\0') {
 				// Partial mitigation reads in the element's color too, dimmed.
 				const ImU32 subColor = KindColor(n, a_rn.alpha * 0.8f);
 				AddOutlinedText(a_drawList, font, subPx,
-					ImVec2(a_topLeft.x + (blockSz.x - subSz.x) * 0.5f, a_topLeft.y + mainSz.y), subColor, outline, n.subtext);
+					ImVec2(content.x + (blockSz.x - subSz.x) * 0.5f, content.y + mainSz.y), subColor, textOutline, textThickness, n.subtext);
 			}
-			return blockSz;
+
+			switch (settings->originStyle) {
+			case OriginStyle::kUnderline:
+				a_drawList->AddRectFilled(
+					ImVec2(content.x, content.y + blockSz.y + 2.0f),
+					ImVec2(content.x + blockSz.x, content.y + blockSz.y + 2.0f + thickness), origin);
+				break;
+			case OriginStyle::kBox:
+				a_drawList->AddRect(
+					ImVec2(a_topLeft.x + thickness * 0.5f, a_topLeft.y + thickness * 0.5f),
+					ImVec2(a_topLeft.x + blockSz.x + 2.0f * padX - thickness * 0.5f, a_topLeft.y + padTop + blockSz.y + padBottom - thickness * 0.5f),
+					origin, 3.0f, 0, thickness);
+				break;
+			default:
+				break;
+			}
+			return { blockSz.x + 2.0f * padX, padTop + blockSz.y + padBottom };
 		}
 
 		// Shared camera pass (flat and VR — the VR camera tracks the HMD):
@@ -283,6 +336,9 @@ namespace FDNG::Renderer
 				if (rn.number->subtext[0] != '\0') {
 					const ImVec2 subEstimate = ImGui::GetFont()->CalcTextSizeA(fontPx * kSubtextRatio, FLT_MAX, 0.0f, rn.number->subtext);
 					blockW = std::max(blockW, subEstimate.x + 8.0f);
+				}
+				if (settings->originStyle == OriginStyle::kBox) {
+					blockW += 2.0f * (4.0f + settings->styleThickness);
 				}
 
 				if (penX + blockW > panelSize.x - kPanelMarginPx) {

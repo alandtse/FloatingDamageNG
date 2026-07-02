@@ -96,6 +96,67 @@ namespace FDNG::UI
 			}
 		}
 
+		std::uint32_t ToImCol(std::uint32_t a_rgb, std::uint8_t a_alpha = 0xFF)
+		{
+			// ImU32 is ABGR-packed.
+			return (static_cast<std::uint32_t>(a_alpha) << 24) | ((a_rgb & 0xFF) << 16) | (a_rgb & 0x00FF00) | ((a_rgb >> 16) & 0xFF);
+		}
+
+		// Live sample of the current style, drawn with the menu font — same
+		// outline/underline/box logic as the in-world renderer.
+		void DrawStylePreview(const Settings* s)
+		{
+			auto* dl = ImGuiMCP::GetWindowDrawList();
+			ImGuiMCP::ImVec2 base;
+			ImGuiMCP::GetCursorScreenPos(&base);
+			const float h = 64.0f;
+			const float w = 560.0f;
+			ImGuiMCP::ImDrawListManager::AddRectFilled(dl, base, { base.x + w, base.y + h }, 0xE0101010, 4.0f, 0);
+
+			struct Sample
+			{
+				const char* text;
+				std::uint32_t fill;
+				std::uint32_t marker;
+			};
+			const Sample samples[] = {
+				{ "36", s->colorFire, s->colorOriginPlayer },
+				{ "CRIT 58", s->colorCritical, s->colorOriginPlayer },
+				{ "22", s->colorFrost, s->colorOriginTaken },
+				{ "17", s->colorShock, s->colorOriginFollower },
+				{ "9", s->colorPhysical, s->colorOriginNPC },
+				{ "+25", s->colorHealing, s->colorOriginPlayer },
+			};
+
+			const float t = s->styleThickness;
+			const float fontH = ImGuiMCP::GetFontSize();
+			float x = base.x + 16.0f;
+			const float y = base.y + (h - fontH) * 0.5f;
+			for (const auto& sm : samples) {
+				const auto fill = ToImCol(sm.fill);
+				const auto marker = ToImCol(sm.marker);
+				const bool outline = s->originStyle == OriginStyle::kOutline;
+				const auto textOutline = outline ? marker : ToImCol(0x000000);
+				const float tt = outline ? t : 1.0f;
+				// 8-direction ring, matching the renderer.
+				const float d = tt * 0.7071f;
+				const float offs[][2] = { { tt, 0 }, { -tt, 0 }, { 0, tt }, { 0, -tt }, { d, d }, { -d, d }, { d, -d }, { -d, -d } };
+				for (const auto& o : offs) {
+					ImGuiMCP::ImDrawListManager::AddText(dl, { x + o[0], y + o[1] }, textOutline, sm.text);
+				}
+				ImGuiMCP::ImDrawListManager::AddText(dl, { x, y }, fill, sm.text);
+
+				const float textW = fontH * 0.55f * static_cast<float>(std::strlen(sm.text));
+				if (s->originStyle == OriginStyle::kUnderline) {
+					ImGuiMCP::ImDrawListManager::AddRectFilled(dl, { x, y + fontH + 2.0f }, { x + textW, y + fontH + 2.0f + t }, marker, 0.0f, 0);
+				} else if (s->originStyle == OriginStyle::kBox) {
+					ImGuiMCP::ImDrawListManager::AddRect(dl, { x - 5.0f, y - 4.0f }, { x + textW + 5.0f, y + fontH + 4.0f }, marker, 3.0f, 0, t);
+				}
+				x += textW + 32.0f;
+			}
+			ImGuiMCP::Dummy({ w, h + 6.0f });
+		}
+
 		void __stdcall RenderSettings()
 		{
 			auto* s = Settings::GetSingleton();
@@ -144,7 +205,15 @@ namespace FDNG::UI
 				Tip("Repeat hits of the same type on one target within this window add into the existing number.");
 			}
 
-			if (ImGuiMCP::CollapsingHeader("Colors", 0)) {
+			if (ImGuiMCP::CollapsingHeader("Colors and style", 0)) {
+				int style = static_cast<int>(s->originStyle);
+				const char* styles[] = { "Colored outline", "Underline", "Box" };
+				if (ImGuiMCP::Combo("Origin marker", &style, styles, 3, -1)) {
+					s->originStyle = static_cast<OriginStyle>(style);
+				}
+				Tip("How a number shows whose fight it is. The number's own color always means the damage type; the marker uses the four 'Marker' colors below.");
+				ImGuiMCP::SliderFloat("Marker thickness", &s->styleThickness, 0.5f, 6.0f, "%.1f", 0);
+				DrawStylePreview(s);
 				for (const auto& def : kColorTable) {
 					ColorRow(def.uiLabel, s->*def.field);
 				}

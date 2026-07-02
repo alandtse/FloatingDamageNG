@@ -12,6 +12,14 @@ namespace FDNG
 		kRadial = 2
 	};
 
+	// How a number marks its origin (whose fight it is).
+	enum class OriginStyle : std::int32_t
+	{
+		kOutline = 0,    // text outline in the origin color
+		kUnderline = 1,  // thin black outline + origin-colored underline bar
+		kBox = 2         // thin black outline + origin-colored border box
+	};
+
 	struct Settings
 	{
 		static Settings* GetSingleton();
@@ -47,6 +55,12 @@ namespace FDNG
 		float minHealToShow{ 5.0f };           // accumulation threshold; filters natural regen trickle
 		float dotAccumulationWindow{ 0.35f };  // merge same victim+type events younger than this
 
+		// [Style] — how a number's origin (whose fight it is) is marked. The
+		// fill color always encodes the damage kind, so origin uses a
+		// secondary channel in the relationship colors below.
+		OriginStyle originStyle{ OriginStyle::kOutline };
+		float styleThickness{ 2.0f };  // outline / underline / box border, panel px
+
 		// [Colors] 0xRRGGBB (alpha applied at draw time)
 		std::uint32_t colorPhysical{ 0xFF3B30 };
 		std::uint32_t colorCritical{ 0xFFCC00 };
@@ -59,6 +73,12 @@ namespace FDNG
 		std::uint32_t colorHealing{ 0x34C759 };
 		std::uint32_t colorMagickaDamage{ 0x4169E1 };  // royal blue
 		std::uint32_t colorStaminaDamage{ 0x2E8B57 };  // sea green
+		// Origin marker colors (relationship palette: incoming red, ally
+		// blue, unrelated gray; your own hits stay neutral black).
+		std::uint32_t colorOriginPlayer{ 0x000000 };
+		std::uint32_t colorOriginTaken{ 0x8C1414 };
+		std::uint32_t colorOriginFollower{ 0x19508C };
+		std::uint32_t colorOriginNPC{ 0x3C3C3C };
 
 		// [Locational] — engine-derived hit location (projectile impact node),
 		// mod-agnostic: works in vanilla and with any locational-damage mod.
@@ -109,7 +129,7 @@ namespace FDNG
 		const char* uiLabel;
 		std::uint32_t Settings::* field;
 	};
-	inline constexpr std::array<ColorDef, 11> kColorTable{ {
+	inline constexpr std::array<ColorDef, 15> kColorTable{ {
 		{ "sPhysical", "Physical", &Settings::colorPhysical },
 		{ "sCritical", "Critical", &Settings::colorCritical },
 		{ "sBlocked", "Blocked", &Settings::colorBlocked },
@@ -121,5 +141,9 @@ namespace FDNG
 		{ "sHealing", "Healing", &Settings::colorHealing },
 		{ "sMagickaDamage", "Magicka damage", &Settings::colorMagickaDamage },
 		{ "sStaminaDamage", "Stamina damage", &Settings::colorStaminaDamage },
+		{ "sOriginPlayer", "Marker: your hits", &Settings::colorOriginPlayer },
+		{ "sOriginTaken", "Marker: damage you take", &Settings::colorOriginTaken },
+		{ "sOriginFollower", "Marker: follower damage", &Settings::colorOriginFollower },
+		{ "sOriginNPC", "Marker: NPC fights", &Settings::colorOriginNPC },
 	} };
 }

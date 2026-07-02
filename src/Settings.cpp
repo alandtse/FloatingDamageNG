@@ -75,6 +75,9 @@ namespace FDNG
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
 
+		originStyle = static_cast<OriginStyle>(std::clamp<long>(ini.GetLongValue("Style", "iOriginStyle", std::to_underlying(originStyle)), 0, 2));
+		styleThickness = std::clamp(static_cast<float>(ini.GetDoubleValue("Style", "fStyleThickness", styleThickness)), 0.5f, 6.0f);
+
 		for (const auto& def : kColorTable) {
 			this->*def.field = GetHexColor(ini, "Colors", def.iniKey, this->*def.field);
 		}
@@ -143,6 +146,9 @@ namespace FDNG
 		CSimpleIniA ini;
 		ini.SetUnicode();
 		ini.LoadFile(kIniPath);  // keep unknown keys/comments where possible
+
+		ini.SetLongValue("Style", "iOriginStyle", std::to_underlying(originStyle));
+		ini.SetDoubleValue("Style", "fStyleThickness", styleThickness);
 
 		for (const auto& def : kColorTable) {
 			ini.SetValue("Colors", def.iniKey, std::format("0x{:06X}", this->*def.field).c_str());
