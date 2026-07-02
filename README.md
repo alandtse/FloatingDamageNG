@@ -66,12 +66,19 @@ description.)
 | Renderer             | Dear ImGui, TTF fonts (D3D11; VR via ImGuiVRHelper)                                       | Scaleform SWF (Flash)                                                                                  | [PrismaUI](https://www.nexusmods.com/skyrimspecialedition/mods/170076) (embedded web/CEF view) |
 | Combat analytics     | Sessions, DPS (real/active), TTD, fled, disk log, in-game graphs, optional MCP/REST       | No                                                                                                     | No                                                                                             |
 | Extra dependencies   | None required on flat; ImGuiVRHelper for VR                                               | None                                                                                                   | PrismaUI                                                                                       |
+| Source code          | Open (GPL-3.0 + modding exception, this repo)                                             | Only an early version (v0.4) was ever published; the author is no longer active                        | Closed                                                                                         |
 
 If you play flat-screen only and want the web-styled visuals, Modern Floating
 Damage is a good mod — the honest difference there is renderer taste
 (embedded browser vs ImGui), analytics, and the mitigation/locational detail.
 If you play VR, this is currently the only one of the three that renders in
 world space at all.
+
+This is also the only floating-damage mod that is open source in its current
+form. That matters in practice: when a game update breaks plugins, anyone can
+rebuild against a new Address Library instead of waiting on a single author,
+the damage hooks are auditable by other mod developers for compatibility work,
+and the project can be forked if it is ever abandoned.
 
 ## Requirements
 
