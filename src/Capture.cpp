@@ -43,6 +43,32 @@ namespace FDNG
 			return std::clamp(1.0f - (1.0f - elemental) * (1.0f - magic), 0.0f, 0.95f);
 		}
 
+		// Nearest named skeleton node to the engine's hit position (main
+		// thread, victim loaded) — how the hit location is identified since
+		// HitData carries no projectile reference.
+		const RE::NiAVObject* FindClosestNode(RE::NiAVObject* a_root, const RE::NiPoint3& a_pos, float& a_bestDistSq)
+		{
+			if (!a_root) {
+				return nullptr;
+			}
+			const RE::NiAVObject* best = nullptr;
+			if (!a_root->name.empty()) {
+				const float d = a_root->world.translate.GetSquaredDistance(a_pos);
+				if (d < a_bestDistSq) {
+					a_bestDistSq = d;
+					best = a_root;
+				}
+			}
+			if (const auto node = a_root->AsNode()) {
+				for (const auto& child : node->GetChildren()) {
+					if (const auto found = FindClosestNode(child.get(), a_pos, a_bestDistSq)) {
+						best = found;
+					}
+				}
+			}
+			return best;
+		}
+
 		OriginTier ClassifyOrigin(RE::Actor* a_victim, RE::Actor* a_attacker)
 		{
 			const auto player = RE::PlayerCharacter::GetSingleton();
@@ -139,47 +165,29 @@ namespace FDNG
 		pending.flags.sneak = a_hitData.flags.any(RE::HitData::Flag::kSneakAttack);
 		pending.flags.powerAttack = a_hitData.flags.any(RE::HitData::Flag::kPowerAttack);
 
-		// Projectile hits carry the struck skeleton node, so hit location is
-		// engine data — no locational-damage mod required (and mod-agnostic
-		// when one is installed).
+		// Ranged hits get locational + amplification treatment. The projectile
+		// itself is unreachable from HitData (sourceRef is not the projectile
+		// on current runtimes), so location is resolved later from hitPosition
+		// against the victim's skeleton — ALD's fallback approach.
 		const auto settings = Settings::GetSingleton();
-		const auto sourceRef = a_hitData.sourceRef.get();
+		pending.hitPos = a_hitData.hitPosition;
+		pending.ranged = a_hitData.weapon &&
+		                 (a_hitData.weapon->IsBow() || a_hitData.weapon->IsCrossbow());
 		if (settings->debugLog) {
-			logger::debug("HitData: target={:08X} sourceRef={} type={} totalDmg={:.1f}",
-				target->GetFormID(), sourceRef ? sourceRef->GetFormID() : 0,
-				sourceRef ? static_cast<int>(sourceRef->GetFormType()) : -1, a_hitData.totalDamage);
+			logger::debug("HitData: target={:08X} ranged={} totalDmg={:.1f}",
+				target->GetFormID(), pending.ranged, a_hitData.totalDamage);
 		}
-		if (const auto projectile = sourceRef ? sourceRef->As<RE::Projectile>() : nullptr) {
-			if (settings->showHitLocation) {
-				auto& impacts = projectile->GetProjectileRuntimeData().impacts;  // BSSimpleList lacks const iteration
-				if (settings->debugLog) {
-					const auto impact = impacts.empty() ? nullptr : *impacts.begin();
-					logger::debug("HitData: projectile impact node='{}'",
-						impact && impact->damageRootNode ? impact->damageRootNode->name.c_str() : "<none>");
-				}
-				if (!impacts.empty()) {
-					if (const auto node = (*impacts.begin())->damageRootNode; node && !node->name.empty()) {
-						for (const auto& tag : settings->locationTags) {
-							if (std::regex_match(node->name.c_str(), tag.pattern)) {
-								std::snprintf(pending.location, sizeof(pending.location), "%s", tag.label.c_str());
-								break;
-							}
-						}
-					}
-				}
-			}
 
+		if (pending.ranged && settings->showAmplification) {
 			// Locational mods scale totalDamage but not physicalDamage, so a
 			// total exceeding the physical+crit baseline implies an external
 			// multiplier. Heuristic — display styling only.
-			if (settings->showAmplification) {
-				const float critMult = pending.flags.critical ? std::max(a_hitData.criticalDamageMult, 1.0f) : 1.0f;
-				const float baseline = a_hitData.physicalDamage * critMult;
-				if (baseline > 0.1f) {
-					const float amp = a_hitData.totalDamage / baseline;
-					if (amp >= settings->amplificationThreshold) {
-						pending.ampMult = amp;
-					}
+			const float critMult = pending.flags.critical ? std::max(a_hitData.criticalDamageMult, 1.0f) : 1.0f;
+			const float baseline = a_hitData.physicalDamage * critMult;
+			if (baseline > 0.1f) {
+				const float amp = a_hitData.totalDamage / baseline;
+				if (amp >= settings->amplificationThreshold) {
+					pending.ampMult = amp;
 				}
 			}
 		}
@@ -329,12 +337,14 @@ namespace FDNG
 		}
 
 		// The pending HitData contributes crit/block/sneak flags, mitigation,
-		// hit location, and the amplification estimate.
+		// hit position, and the amplification estimate.
 		HitFlags flags;
 		float mitigated = 0.0f;
 		float ampMult = 0.0f;
 		char location[16]{};
 		auto mitLabel = MitigationLabel::kArmor;
+		bool ranged = false;
+		RE::NiPoint3 hitPos;
 		{
 			std::scoped_lock lk{ _lock };
 			if (const auto it = _pendingHits.find(a_raw.victimID);
@@ -349,8 +359,27 @@ namespace FDNG
 					mitLabel = MitigationLabel::kResisted;
 				}
 				ampMult = it->second.ampMult;
-				std::memcpy(location, it->second.location, sizeof(location));
+				ranged = it->second.ranged;
+				hitPos = it->second.hitPos;
 				_pendingHits.erase(it);
+			}
+		}
+
+		// Locational tag for ranged hits: nearest skeleton node to the
+		// engine's contact point, matched against the configured patterns.
+		const auto settings = Settings::GetSingleton();
+		if (ranged && settings->showHitLocation && a_victim->Is3DLoaded()) {
+			float bestDistSq = 55.0f * 55.0f;  // reject contact points far off the skeleton
+			if (const auto node = FindClosestNode(a_victim->Get3D(), hitPos, bestDistSq)) {
+				if (settings->debugLog) {
+					logger::debug("Hit location: node='{}' dist={:.1f}", node->name.c_str(), std::sqrt(bestDistSq));
+				}
+				for (const auto& tag : settings->locationTags) {
+					if (std::regex_match(node->name.c_str(), tag.pattern)) {
+						std::snprintf(location, sizeof(location), "%s", tag.label.c_str());
+						break;
+					}
+				}
 			}
 		}
 

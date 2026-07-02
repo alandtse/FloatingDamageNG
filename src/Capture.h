@@ -118,11 +118,12 @@ namespace FDNG
 		struct PendingHit
 		{
 			Clock::time_point stamp;
+			RE::NiPoint3 hitPos;  // engine contact point, for locational lookup
 			float physicalDamage{ 0.0f };
 			float resistedPhysical{ 0.0f };  // armor
 			float resistedTyped{ 0.0f };     // enchant payload resisted
 			float ampMult{ 0.0f };
-			char location[16]{};
+			bool ranged{ false };  // bow/crossbow hit — locational + amplification apply
 			HitFlags flags;
 		};
 
