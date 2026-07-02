@@ -20,13 +20,11 @@ namespace FDNG
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
 
-		// Crowd attenuation tiers and per-number styling. NPC numbers stay
-		// clearly legible — 0.45/0.35 proved invisible in an HMD once
-		// distance shrank them further.
-		constexpr float kFollowerScale = 0.70f;
-		constexpr float kFollowerAlpha = 0.65f;
-		constexpr float kNPCScale = 0.60f;
-		constexpr float kNPCAlpha = 0.60f;
+		// Crowd hierarchy comes from size and outline color (see the
+		// renderer), never opacity — alpha attenuation proved to scale
+		// straight to invisible in an HMD.
+		constexpr float kFollowerScale = 0.85f;
+		constexpr float kNPCScale = 0.70f;
 		constexpr float kCritScaleBoost = 1.5f;
 		constexpr float kPopInSeconds = 0.12f;
 		constexpr float kMinMagnitudeScale = 0.6f;
@@ -256,11 +254,9 @@ namespace FDNG
 			switch (n.origin) {
 			case OriginTier::kFollower:
 				scaleMult = kFollowerScale;
-				alphaMult = kFollowerAlpha;
 				break;
 			case OriginTier::kNPC:
 				scaleMult = kNPCScale;
-				alphaMult = kNPCAlpha;
 				if (playerPos.GetSquaredDistance(n.anchor) > maxRadiusSq) {
 					++radiusCulled;
 					continue;

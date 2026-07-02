@@ -112,10 +112,26 @@ namespace FDNG::Renderer
 			ImGui::PopStyleVar();
 		}
 
-		void AddOutlinedText(ImDrawList* a_drawList, ImFont* a_font, float a_size, ImVec2 a_pos, ImU32 a_color, std::uint8_t a_alpha, const char* a_text)
+		// Outline color encodes who's involved (established relationship
+		// palette: incoming red, ally blue, unrelated gray) — the fill hue is
+		// reserved for the damage kind, so origin must not repurpose it.
+		ImU32 OutlineColor(OriginTier a_origin, std::uint8_t a_alpha)
 		{
-			const ImU32 shadow = IM_COL32(0, 0, 0, a_alpha);
-			a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + 2.0f, a_pos.y + 2.0f), shadow, a_text);
+			switch (a_origin) {
+			case OriginTier::kPlayerVictim:
+				return IM_COL32(140, 20, 20, a_alpha);  // damage you take: red
+			case OriginTier::kFollower:
+				return IM_COL32(25, 80, 140, a_alpha);  // your allies: blue
+			case OriginTier::kNPC:
+				return IM_COL32(60, 60, 60, a_alpha);  // bystander fights: soft gray
+			default:
+				return IM_COL32(0, 0, 0, a_alpha);  // your hits: crisp black
+			}
+		}
+
+		void AddOutlinedText(ImDrawList* a_drawList, ImFont* a_font, float a_size, ImVec2 a_pos, ImU32 a_color, ImU32 a_outline, const char* a_text)
+		{
+			a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + 2.0f, a_pos.y + 2.0f), a_outline, a_text);
 			a_drawList->AddText(a_font, a_size, a_pos, a_color, a_text);
 		}
 
@@ -146,13 +162,14 @@ namespace FDNG::Renderer
 
 			const auto alpha = static_cast<std::uint8_t>(std::clamp(a_rn.alpha, 0.0f, 1.0f) * 255.0f);
 			const ImU32 color = KindColor(n, a_rn.alpha);
+			const ImU32 outline = OutlineColor(n.origin, alpha);
 			AddOutlinedText(a_drawList, font, mainPx,
-				ImVec2(a_topLeft.x + (blockSz.x - mainSz.x) * 0.5f, a_topLeft.y), color, alpha, n.text);
+				ImVec2(a_topLeft.x + (blockSz.x - mainSz.x) * 0.5f, a_topLeft.y), color, outline, n.text);
 			if (n.subtext[0] != '\0') {
 				// Partial mitigation reads in the element's color too, dimmed.
 				const ImU32 subColor = KindColor(n, a_rn.alpha * 0.8f);
 				AddOutlinedText(a_drawList, font, subPx,
-					ImVec2(a_topLeft.x + (blockSz.x - subSz.x) * 0.5f, a_topLeft.y + mainSz.y), subColor, alpha, n.subtext);
+					ImVec2(a_topLeft.x + (blockSz.x - subSz.x) * 0.5f, a_topLeft.y + mainSz.y), subColor, outline, n.subtext);
 			}
 			return blockSz;
 		}
