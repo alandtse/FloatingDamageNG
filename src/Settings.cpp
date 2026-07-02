@@ -64,6 +64,7 @@ namespace FDNG
 		quadLifetimeSeconds = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fQuadLifetimeSeconds", quadLifetimeSeconds));
 
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		showResisted = ini.GetBoolValue("Behavior", "bShowResisted", showResisted);
 		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
@@ -172,6 +173,7 @@ namespace FDNG
 		ini.SetDoubleValue("KinematicProfiles", "fQuadLifetimeSeconds", quadLifetimeSeconds);
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		ini.SetBoolValue("Behavior", "bShowResisted", showResisted);
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
 		ini.SetDoubleValue("Behavior", "fMinHealToShow", minHealToShow);
 		ini.SetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow);

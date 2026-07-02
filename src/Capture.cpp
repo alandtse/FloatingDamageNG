@@ -217,7 +217,9 @@ namespace FDNG
 
 	void Capture::OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue)
 	{
-		if (!a_effect || !a_target || a_value == 0.0f) {
+		// Zero-amount applications stay queued: a hostile health effect that
+		// applies for zero is a fully-resisted hit worth a "RESISTED" tag.
+		if (!a_effect || !a_target) {
 			return;
 		}
 		RawEvent raw;
@@ -227,6 +229,9 @@ namespace FDNG
 		raw.av = a_actorValue != RE::ActorValue::kNone ? a_actorValue : a_effect->actorValue;
 		raw.victimID = a_target->GetFormID();
 		raw.amount = a_value;
+		if (raw.amount == 0.0f && raw.av != RE::ActorValue::kHealth) {
+			return;  // zero-appliers on non-health AVs (paralysis etc.) are just noise
+		}
 		// Safe on this thread: the effect is alive inside its own vfunc, the
 		// handle table resolve is thread-safe, and GetFormID is a plain read.
 		if (const auto caster = a_effect->caster.get()) {
@@ -349,6 +354,27 @@ namespace FDNG
 		if (a_raw.av == RE::ActorValue::kHealth) {
 			if (a_raw.amount > 0.0f) {
 				ProcessRestore(a_victim, a_raw.amount, caster);
+				return;
+			}
+			if (a_raw.amount == 0.0f) {
+				// A hostile health effect that applies for zero = fully
+				// resisted/immune. Tag once per victim per window — immune
+				// targets zero every tick.
+				if (!settings->showResisted || !mgef || !(mgef->IsHostile() || mgef->IsDetrimental())) {
+					return;
+				}
+				{
+					const auto now = Clock::now();
+					std::scoped_lock lk{ _lock };
+					auto& stamp = _resistStamps[a_raw.victimID];
+					if (now - stamp < std::chrono::milliseconds(1200)) {
+						return;
+					}
+					stamp = now;
+				}
+				HitFlags flags;
+				flags.blocked = true;  // grey styling
+				EmitDamage(a_victim, caster, 0.0f, DamageKind::kMagic, flags, 0.0f, 0.0f, "RESISTED");
 				return;
 			}
 			auto kind = ClassifyMagicKind(mgef);

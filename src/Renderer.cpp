@@ -78,6 +78,18 @@ namespace FDNG::Renderer
 			return camera && camera->IsInFirstPerson();
 		}
 
+		// Player-received numbers follow the player (self-heals while moving);
+		// enemy numbers stay at the impact snapshot.
+		RE::NiPoint3 PlayerHeadPos(RE::PlayerCharacter* a_player)
+		{
+			if (const auto middle = a_player->GetMiddleHighProcess(); middle && middle->headNode) {
+				return middle->headNode->world.translate;
+			}
+			auto pos = a_player->GetPosition();
+			pos.z += a_player->GetHeight();
+			return pos;
+		}
+
 		// Small live DPS readout (spec §5); lingers for the configured fade
 		// window after combat ends.
 		void DrawLiveDPSWindow()
@@ -183,11 +195,15 @@ namespace FDNG::Renderer
 
 			for (const auto& rn : g_resolved) {
 				RE::NiPoint3 worldPos = rn.worldPos;
-				if (firstPerson && rn.number->origin == OriginTier::kPlayerVictim) {
-					if (!settings->showFirstPersonNumbers || !player) {
-						continue;
+				if (rn.number->origin == OriginTier::kPlayerVictim && player) {
+					if (firstPerson) {
+						if (!settings->showFirstPersonNumbers) {
+							continue;
+						}
+						worldPos = firstPersonAnchor + (rn.worldPos - rn.number->anchor);  // keep the kinematic motion
+					} else {
+						worldPos = PlayerHeadPos(player) + (rn.worldPos - rn.number->anchor);  // follow the player
 					}
-					worldPos = firstPersonAnchor + (rn.worldPos - rn.number->anchor);  // keep the kinematic motion
 				}
 				// Full alpha in the panel; the fade is baked into the text color,
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
@@ -265,8 +281,12 @@ namespace FDNG::Renderer
 						displaySize.y * settings->firstPersonY - risePx);
 					fontPx = kBaseFontPx * rn.scale;
 				} else {
+					RE::NiPoint3 worldPos = rn.worldPos;
+					if (rn.number->origin == OriginTier::kPlayerVictim && player) {
+						worldPos = PlayerHeadPos(player) + (rn.worldPos - rn.number->anchor);  // follow the player
+					}
 					float x = 0.0f, y = 0.0f, z = -1.0f;
-					if (!camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) || z <= 0.0f) {
+					if (!camera->WorldPtToScreenPt3(worldPos, x, y, z, 1e-5f) || z <= 0.0f) {
 						continue;
 					}
 					screenPos = ImVec2(displaySize.x * x, displaySize.y * (1.0f - y));

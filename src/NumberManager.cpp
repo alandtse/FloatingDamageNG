@@ -37,6 +37,13 @@ namespace FDNG
 
 	void NumberManager::BuildText(Number& a_number) const
 	{
+		// Zero-amount tagged events (RESISTED) show the tag alone.
+		if (a_number.amount < 0.5f && a_number.location[0] != '\0') {
+			std::snprintf(a_number.text, sizeof(a_number.text), "%s", a_number.location);
+			a_number.subtext[0] = '\0';
+			return;
+		}
+
 		const auto rounded = std::max(1, static_cast<int>(std::lround(a_number.amount)));
 		const char* prefix = "";
 		char locPrefix[20]{};

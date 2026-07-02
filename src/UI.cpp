@@ -94,6 +94,7 @@ namespace FDNG::UI
 
 			ImGuiMCP::SeparatorText("Behavior");
 			ImGuiMCP::Checkbox("Show mitigation subtext", &s->showMitigation);
+			ImGuiMCP::Checkbox("Show RESISTED on immune targets", &s->showResisted);
 			ImGuiMCP::SliderFloat("Min damage to show", &s->minDamageToShow, 0.0f, 25.0f, "%.1f", 0);
 			ImGuiMCP::SliderFloat("Min heal to show", &s->minHealToShow, 1.0f, 50.0f, "%.1f", 0);
 			ImGuiMCP::SliderFloat("Tick merge window (s)", &s->dotAccumulationWindow, 0.1f, 2.0f, "%.2f", 0);
