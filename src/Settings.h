@@ -83,6 +83,9 @@ namespace FDNG
 		bool enableLiveDPSWindow{ true };  // small live DPS readout (flat only for now)
 		bool logFollowerPerformance{ true };
 		float postCombatWindowFadeSeconds{ 5.0f };
+		// Opt-in: registering with devbench exposes combat stats on the port
+		// the devbench host binds, so it is off unless the user enables it.
+		bool enableDevBench{ false };
 
 		// [Debug]
 		bool debugLog{ false };

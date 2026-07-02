@@ -3,6 +3,8 @@
 
 #include "DevBench.h"
 
+#include "Settings.h"
+
 #include <DevBenchAPI.h>
 #include <nlohmann/json.hpp>
 
@@ -67,6 +69,15 @@ namespace FDNG::DevBench
 
 	void Connect()
 	{
+		// Opt-in: the devbench host serves a local port; exposing combat
+		// stats on it requires the user's explicit say-so.
+		if (!Settings::GetSingleton()->enableDevBench) {
+			logger::info("devbench integration disabled (bEnableDevBench=false).");
+			return;
+		}
+		if (g_devbench) {
+			return;  // already registered (UI toggle can call this again)
+		}
 		g_devbench = DevBenchAPI::GetDevBenchInterface001();
 		if (!g_devbench) {
 			logger::info("devbench not installed; stats tool not registered.");

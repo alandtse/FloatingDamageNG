@@ -32,6 +32,7 @@ namespace logger = SKSE::log;
 #include "SKSEMenuFramework.h"
 
 #include "CombatLog.h"
+#include "DevBench.h"
 #include "Settings.h"
 #include "UI.h"
 
@@ -114,6 +115,9 @@ namespace FDNG::UI
 			ImGuiMCP::Checkbox("Write sessions to disk", &s->writeLogToDisk);
 			ImGuiMCP::Checkbox("Live DPS window (flat)", &s->enableLiveDPSWindow);
 			ImGuiMCP::Checkbox("Log follower performance", &s->logFollowerPerformance);
+			if (ImGuiMCP::Checkbox("devbench integration (exposes stats on its local port)", &s->enableDevBench) && s->enableDevBench) {
+				DevBench::Connect();
+			}
 
 			ImGuiMCP::SeparatorText("Debug");
 			ImGuiMCP::Checkbox("Debug log", &s->debugLog);

@@ -110,6 +110,7 @@ namespace FDNG
 		enableLiveDPSWindow = ini.GetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
 		logFollowerPerformance = ini.GetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
 		postCombatWindowFadeSeconds = static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds));
+		enableDevBench = ini.GetBoolValue("Analytics", "bEnableDevBench", enableDevBench);
 
 		debugLog = ini.GetBoolValue("Debug", "bDebugLog", debugLog);
 		deltaAudit = ini.GetBoolValue("Debug", "bDeltaAudit", deltaAudit);
@@ -176,6 +177,7 @@ namespace FDNG
 		ini.SetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
 		ini.SetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
 		ini.SetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds);
+		ini.SetBoolValue("Analytics", "bEnableDevBench", enableDevBench);
 
 		ini.SetBoolValue("Debug", "bDebugLog", debugLog);
 		ini.SetBoolValue("Debug", "bDeltaAudit", deltaAudit);
