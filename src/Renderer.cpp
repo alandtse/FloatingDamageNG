@@ -167,6 +167,7 @@ namespace FDNG::Renderer
 		void ProjectResolved()
 		{
 			const auto camera = RE::Main::WorldRootCamera();
+			std::size_t projectedCount = 0;
 			for (auto& rn : g_resolved) {
 				float x = 0.0f, y = 0.0f, z = -1.0f;
 				rn.projected = camera && camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) && z > 0.0f;
@@ -174,6 +175,14 @@ namespace FDNG::Renderer
 				rn.screenY = y;
 				rn.inView = rn.number->origin != OriginTier::kNPC ||
 				            (rn.projected && x > -0.3f && x < 1.3f && y > -0.3f && y < 1.3f);
+				projectedCount += rn.projected ? 1 : 0;
+			}
+			// If nothing projects the camera matrix is unusable this frame;
+			// don't let a bad projection demote every NPC number.
+			if (projectedCount == 0) {
+				for (auto& rn : g_resolved) {
+					rn.inView = true;
+				}
 			}
 		}
 
