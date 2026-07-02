@@ -110,9 +110,8 @@ namespace FDNG::Hooks
 				// vtable, so no hook can see it. This entry fires exactly once
 				// per application, so synthesizing the secondary event here
 				// reproduces the engine's own math (a_value × weight). The
-				// vfunc getters are mandatory: CommonLib's cached
-				// secondaryActorValue/secondaryAVWeight members are mislaid
-				// (this+0x98 holds the weight float; no AV is cached).
+				// secondary AV is never cached on the instance; the vfunc
+				// getter reads it from the MGEF form.
 				if (const auto dual = skyrim_cast<RE::DualValueModifierEffect*>(a_this)) {
 					const auto secondaryAV = dual->GetAdditionalActorValue();
 					if (secondaryAV != RE::ActorValue::kNone) {
