@@ -20,11 +20,13 @@ namespace FDNG
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
 
-		// Crowd attenuation tiers and per-number styling.
+		// Crowd attenuation tiers and per-number styling. NPC numbers stay
+		// clearly legible — 0.45/0.35 proved invisible in an HMD once
+		// distance shrank them further.
 		constexpr float kFollowerScale = 0.70f;
-		constexpr float kFollowerAlpha = 0.60f;
-		constexpr float kNPCScale = 0.45f;
-		constexpr float kNPCAlpha = 0.35f;
+		constexpr float kFollowerAlpha = 0.65f;
+		constexpr float kNPCScale = 0.60f;
+		constexpr float kNPCAlpha = 0.60f;
 		constexpr float kCritScaleBoost = 1.5f;
 		constexpr float kPopInSeconds = 0.12f;
 		constexpr float kMinMagnitudeScale = 0.6f;
@@ -227,6 +229,7 @@ namespace FDNG
 			const float r = settings->maxVisibilityRadiusMeters * kMeterToGameUnit;
 			return r * r;
 		}();
+		std::size_t radiusCulled = 0;
 
 		for (auto& n : _pool) {
 			if (!n.active) {
@@ -259,6 +262,7 @@ namespace FDNG
 				scaleMult = kNPCScale;
 				alphaMult = kNPCAlpha;
 				if (playerPos.GetSquaredDistance(n.anchor) > maxRadiusSq) {
+					++radiusCulled;
 					continue;
 				}
 				break;
@@ -288,6 +292,15 @@ namespace FDNG
 			resolved.scale = scaleMult * magnitudeScale;
 			resolved.alpha = alphaMult;
 			a_out.push_back(resolved);
+		}
+
+		if (radiusCulled > 0 && settings->debugLog) {
+			static std::chrono::steady_clock::time_point lastTrace;
+			if (now - lastTrace > std::chrono::seconds(1)) {
+				lastTrace = now;
+				logger::debug("Resolve: {} NPC numbers culled by visibility radius ({:.0f} m)",
+					radiusCulled, settings->maxVisibilityRadiusMeters);
+			}
 		}
 	}
 }

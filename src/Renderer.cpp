@@ -304,8 +304,30 @@ namespace FDNG::Renderer
 				penX += blockW + kPanelGapPx;
 			}
 
-			if (dropped > 0 && Settings::GetSingleton()->debugLog) {
-				logger::debug("VR panel full ({}x{}): {} of {} numbers dropped", panelSize.x, panelSize.y, dropped, g_resolved.size());
+			if (Settings::GetSingleton()->debugLog) {
+				if (dropped > 0) {
+					logger::debug("VR panel full ({}x{}): {} of {} numbers dropped", panelSize.x, panelSize.y, dropped, g_resolved.size());
+				}
+				// 1 Hz stage trace: what reached the packer and what the first
+				// NPC quad looks like (pos/size), to pinpoint display losses.
+				static std::chrono::steady_clock::time_point lastTrace;
+				const auto now = std::chrono::steady_clock::now();
+				if (now - lastTrace > std::chrono::seconds(1) && !g_resolved.empty()) {
+					lastTrace = now;
+					std::size_t npc = 0;
+					for (const auto& rn : g_resolved) {
+						npc += rn.number->origin == OriginTier::kNPC ? 1 : 0;
+					}
+					logger::debug("VR pack: resolved={} npc={} quads={} dropped={} panel={}x{}",
+						g_resolved.size(), npc, g_quads.size(), dropped, panelSize.x, panelSize.y);
+					for (const auto& rn : g_resolved) {
+						if (rn.number->origin == OriginTier::kNPC) {
+							logger::debug("VR pack: first NPC '{}' scale={:.2f} alpha={:.2f} inView={} pos=({:.0f},{:.0f},{:.0f})",
+								rn.number->text, rn.scale, rn.alpha, rn.inView, rn.worldPos.x, rn.worldPos.y, rn.worldPos.z);
+							break;
+						}
+					}
+				}
 			}
 
 			ImGui::End();
