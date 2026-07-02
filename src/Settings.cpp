@@ -4,6 +4,7 @@
 #include "Settings.h"
 
 #include <SimpleIni.h>
+#include <spdlog/spdlog.h>
 
 namespace FDNG
 {
@@ -118,6 +119,13 @@ namespace FDNG
 
 		debugLog = ini.GetBoolValue("Debug", "bDebugLog", debugLog);
 		deltaAudit = ini.GetBoolValue("Debug", "bDeltaAudit", deltaAudit);
+
+		// The default sink filters at info, which would swallow the debug
+		// traces bDebugLog exists to produce.
+		if (const auto log = spdlog::default_logger()) {
+			log->set_level(debugLog ? spdlog::level::debug : spdlog::level::info);
+			log->flush_on(debugLog ? spdlog::level::debug : spdlog::level::info);
+		}
 
 		logger::info("Settings loaded (profile={}, lifetime={:.2f}s, maxQuads={}).",
 			std::to_underlying(profile), quadLifetimeSeconds, maxConcurrentQuads);
