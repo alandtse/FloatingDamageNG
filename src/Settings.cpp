@@ -1,0 +1,161 @@
+// SPDX-License-Identifier: GPL-3.0-or-later WITH LicenseRef-Modding-Exception
+// Copyright (c) 2026 FloatingDamageNG contributors. See COPYING and EXCEPTIONS.md.
+
+#include "Settings.h"
+
+#include <SimpleIni.h>
+
+namespace FDNG
+{
+	namespace
+	{
+		constexpr auto kIniPath = L"Data/SKSE/Plugins/FloatingDamageNG.ini";
+
+		std::uint32_t GetHexColor(const CSimpleIniA& a_ini, const char* a_section, const char* a_key, std::uint32_t a_default)
+		{
+			const char* raw = a_ini.GetValue(a_section, a_key);
+			if (!raw) {
+				return a_default;
+			}
+			std::string_view sv{ raw };
+			if (sv.starts_with("0x") || sv.starts_with("0X")) {
+				sv.remove_prefix(2);
+			} else if (sv.starts_with('#')) {
+				sv.remove_prefix(1);
+			}
+			std::uint32_t value = 0;
+			const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), value, 16);
+			return ec == std::errc() ? value : a_default;
+		}
+	}
+
+	Settings* Settings::GetSingleton()
+	{
+		static Settings singleton;
+		return &singleton;
+	}
+
+	void Settings::Load()
+	{
+		CSimpleIniA ini;
+		ini.SetUnicode();
+		if (ini.LoadFile(kIniPath) < 0) {
+			logger::info("No FloatingDamageNG.ini found; using defaults.");
+			return;
+		}
+
+		showPlayerDamageDealt = ini.GetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
+		showFollowerDamageDealt = ini.GetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
+		showNPCOnNPCDamage = ini.GetBoolValue("CoreFilters", "bShowNPCOnNPCDamage", showNPCOnNPCDamage);
+		showPlayerDamageTaken = ini.GetBoolValue("CoreFilters", "bShowPlayerDamageTaken", showPlayerDamageTaken);
+		showHealing = ini.GetBoolValue("CoreFilters", "bShowHealing", showHealing);
+		showMagickaDamage = ini.GetBoolValue("CoreFilters", "bShowMagickaDamage", showMagickaDamage);
+		showStaminaDamage = ini.GetBoolValue("CoreFilters", "bShowStaminaDamage", showStaminaDamage);
+		maxVisibilityRadiusMeters = static_cast<float>(ini.GetDoubleValue("CoreFilters", "fMaxVisibilityRadius", maxVisibilityRadiusMeters));
+		maxConcurrentQuads = static_cast<int>(ini.GetLongValue("CoreFilters", "iMaxConcurrentQuads", maxConcurrentQuads));
+
+		baseFontScale = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale));
+		logScaleModifier = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier));
+		maxFontScaleCeiling = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling));
+
+		profile = static_cast<KinematicProfile>(std::clamp<long>(ini.GetLongValue("KinematicProfiles", "iSelectedProfile", std::to_underlying(profile)), 0, 2));
+		globalSpeedMultiplier = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fGlobalSpeedMultiplier", globalSpeedMultiplier));
+		quadLifetimeSeconds = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fQuadLifetimeSeconds", quadLifetimeSeconds));
+
+		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
+		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
+		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
+
+		colorPhysical = GetHexColor(ini, "Colors", "sPhysical", colorPhysical);
+		colorCritical = GetHexColor(ini, "Colors", "sCritical", colorCritical);
+		colorBlocked = GetHexColor(ini, "Colors", "sBlocked", colorBlocked);
+		colorFire = GetHexColor(ini, "Colors", "sFire", colorFire);
+		colorFrost = GetHexColor(ini, "Colors", "sFrost", colorFrost);
+		colorShock = GetHexColor(ini, "Colors", "sShock", colorShock);
+		colorPoison = GetHexColor(ini, "Colors", "sPoison", colorPoison);
+		colorMagic = GetHexColor(ini, "Colors", "sMagic", colorMagic);
+		colorHealing = GetHexColor(ini, "Colors", "sHealing", colorHealing);
+		colorMagickaDamage = GetHexColor(ini, "Colors", "sMagickaDamage", colorMagickaDamage);
+		colorStaminaDamage = GetHexColor(ini, "Colors", "sStaminaDamage", colorStaminaDamage);
+
+		if (const char* font = ini.GetValue("Font", "sFontPath"); font && font[0] != '\0') {
+			fontPath = font;
+		}
+
+		enableCombatLog = ini.GetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
+		writeLogToDisk = ini.GetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
+		enableLiveDPSWindow = ini.GetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
+		logFollowerPerformance = ini.GetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
+		postCombatWindowFadeSeconds = static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds));
+
+		debugLog = ini.GetBoolValue("Debug", "bDebugLog", debugLog);
+		deltaAudit = ini.GetBoolValue("Debug", "bDeltaAudit", deltaAudit);
+
+		logger::info("Settings loaded (profile={}, lifetime={:.2f}s, maxQuads={}).",
+			std::to_underlying(profile), quadLifetimeSeconds, maxConcurrentQuads);
+	}
+
+	void Settings::Save() const
+	{
+		CSimpleIniA ini;
+		ini.SetUnicode();
+		ini.LoadFile(kIniPath);  // keep unknown keys/comments where possible
+
+		const auto setHex = [&](const char* key, std::uint32_t value) {
+			ini.SetValue("Colors", key, std::format("0x{:06X}", value).c_str());
+		};
+
+		ini.SetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
+		ini.SetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
+		ini.SetBoolValue("CoreFilters", "bShowNPCOnNPCDamage", showNPCOnNPCDamage);
+		ini.SetBoolValue("CoreFilters", "bShowPlayerDamageTaken", showPlayerDamageTaken);
+		ini.SetBoolValue("CoreFilters", "bShowHealing", showHealing);
+		ini.SetBoolValue("CoreFilters", "bShowMagickaDamage", showMagickaDamage);
+		ini.SetBoolValue("CoreFilters", "bShowStaminaDamage", showStaminaDamage);
+		ini.SetDoubleValue("CoreFilters", "fMaxVisibilityRadius", maxVisibilityRadiusMeters);
+		ini.SetLongValue("CoreFilters", "iMaxConcurrentQuads", maxConcurrentQuads);
+
+		ini.SetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale);
+		ini.SetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier);
+		ini.SetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling);
+
+		ini.SetValue("Font", "sFontPath", fontPath.c_str());
+
+		ini.SetLongValue("KinematicProfiles", "iSelectedProfile", std::to_underlying(profile));
+		ini.SetDoubleValue("KinematicProfiles", "fGlobalSpeedMultiplier", globalSpeedMultiplier);
+		ini.SetDoubleValue("KinematicProfiles", "fQuadLifetimeSeconds", quadLifetimeSeconds);
+
+		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
+		ini.SetDoubleValue("Behavior", "fMinHealToShow", minHealToShow);
+		ini.SetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow);
+
+		setHex("sPhysical", colorPhysical);
+		setHex("sCritical", colorCritical);
+		setHex("sBlocked", colorBlocked);
+		setHex("sFire", colorFire);
+		setHex("sFrost", colorFrost);
+		setHex("sShock", colorShock);
+		setHex("sPoison", colorPoison);
+		setHex("sMagic", colorMagic);
+		setHex("sHealing", colorHealing);
+		setHex("sMagickaDamage", colorMagickaDamage);
+		setHex("sStaminaDamage", colorStaminaDamage);
+
+		ini.SetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
+		ini.SetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
+		ini.SetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
+		ini.SetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
+		ini.SetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds);
+
+		ini.SetBoolValue("Debug", "bDebugLog", debugLog);
+		ini.SetBoolValue("Debug", "bDeltaAudit", deltaAudit);
+
+		if (ini.SaveFile(kIniPath) < 0) {
+			logger::warn("Failed to save FloatingDamageNG.ini");
+		} else {
+			logger::info("Settings saved to INI.");
+		}
+	}
+}
