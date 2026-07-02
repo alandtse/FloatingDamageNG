@@ -51,6 +51,13 @@ namespace FDNG
 			if (!a_root) {
 				return nullptr;
 			}
+			// Bones only (NiNodes): leaf geometry carries mesh names like
+			// 'giant_heavy_cloth:0' that would shadow the skeleton names the
+			// location patterns match.
+			const auto node = a_root->AsNode();
+			if (!node) {
+				return nullptr;
+			}
 			const RE::NiAVObject* best = nullptr;
 			if (!a_root->name.empty()) {
 				const float d = a_root->world.translate.GetSquaredDistance(a_pos);
@@ -59,11 +66,9 @@ namespace FDNG
 					best = a_root;
 				}
 			}
-			if (const auto node = a_root->AsNode()) {
-				for (const auto& child : node->GetChildren()) {
-					if (const auto found = FindClosestNode(child.get(), a_pos, a_bestDistSq)) {
-						best = found;
-					}
+			for (const auto& child : node->GetChildren()) {
+				if (const auto found = FindClosestNode(child.get(), a_pos, a_bestDistSq)) {
+					best = found;
 				}
 			}
 			return best;
