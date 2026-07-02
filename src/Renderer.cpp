@@ -26,7 +26,7 @@ namespace FDNG::Renderer
 		constexpr float kBaseFontPx = 48.0f;
 		constexpr float kSubtextRatio = 0.55f;
 		constexpr float kPanelMarginPx = 16.0f;
-		constexpr float kPanelGapPx = 24.0f;
+		constexpr float kPanelGapPx = 12.0f;  // enough to prevent quad UV bleed; smaller = more panel capacity
 		// World size of one panel pixel on a billboard (matches FloatingSubtitles' tuning).
 		constexpr float kWorldMetersPerPanelPixel = 0.0016875f;
 
@@ -184,10 +184,27 @@ namespace FDNG::Renderer
 				firstPersonAnchor.z += 100.0f;
 			}
 
+			// Panel space is finite and busy battles overflow it, so pack in
+			// priority order: the player's own numbers first, then NPC-on-NPC
+			// nearest-first — distant brawls are what overflow drops.
+			const auto anchorPos = player ? player->GetPosition() : RE::NiPoint3{};
+			std::sort(g_resolved.begin(), g_resolved.end(), [&](const ResolvedNumber& a, const ResolvedNumber& b) {
+				const bool aNPC = a.number->origin == OriginTier::kNPC;
+				const bool bNPC = b.number->origin == OriginTier::kNPC;
+				if (aNPC != bNPC) {
+					return bNPC;
+				}
+				if (!aNPC) {
+					return false;  // player-relevant numbers keep pool order
+				}
+				return anchorPos.GetSquaredDistance(a.worldPos) < anchorPos.GetSquaredDistance(b.worldPos);
+			});
+
 			// Simple shelf packer across the panel.
 			float penX = kPanelMarginPx;
 			float penY = kPanelMarginPx;
 			float rowH = 0.0f;
+			std::size_t dropped = 0;
 
 			for (const auto& rn : g_resolved) {
 				RE::NiPoint3 worldPos = rn.worldPos;
@@ -201,7 +218,13 @@ namespace FDNG::Renderer
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
 				const float fontPx = kBaseFontPx * rn.scale;
 				const ImVec2 estimate = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
+				// The subtext can be wider than the main text; reserve for it or
+				// neighboring quads sample each other's pixels.
 				float blockW = estimate.x + 8.0f;
+				if (rn.number->subtext[0] != '\0') {
+					const ImVec2 subEstimate = ImGui::GetFont()->CalcTextSizeA(fontPx * kSubtextRatio, FLT_MAX, 0.0f, rn.number->subtext);
+					blockW = std::max(blockW, subEstimate.x + 8.0f);
+				}
 
 				if (penX + blockW > panelSize.x - kPanelMarginPx) {
 					penX = kPanelMarginPx;
@@ -209,7 +232,8 @@ namespace FDNG::Renderer
 					rowH = 0.0f;
 				}
 				if (penY + fontPx * 2.0f > panelSize.y - kPanelMarginPx) {
-					break;  // panel full; drop the rest this frame
+					++dropped;
+					continue;  // panel full; count the rest for the debug trace
 				}
 
 				const ImVec2 blockSz = DrawNumberBlock(drawList, rn, ImVec2(penX, penY), fontPx);
@@ -232,6 +256,10 @@ namespace FDNG::Renderer
 				g_quads.push_back(quad);
 
 				penX += blockW + kPanelGapPx;
+			}
+
+			if (dropped > 0 && Settings::GetSingleton()->debugLog) {
+				logger::debug("VR panel full ({}x{}): {} of {} numbers dropped", panelSize.x, panelSize.y, dropped, g_resolved.size());
 			}
 
 			ImGui::End();
