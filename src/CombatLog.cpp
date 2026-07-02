@@ -259,7 +259,19 @@ namespace FDNG
 		}
 
 		if (settings->writeLogToDisk) {
-			std::ofstream out(LogPath(), std::ios::app);
+			// Rotate once past the cap so a long-running install never grows
+			// an unbounded file; one .old generation is kept.
+			constexpr std::uintmax_t kMaxLogBytes = 5ull * 1024 * 1024;
+			const auto path = LogPath();
+			std::error_code ec;
+			if (std::filesystem::file_size(path, ec) > kMaxLogBytes && !ec) {
+				auto old = path;
+				old += ".old";
+				std::filesystem::remove(old, ec);
+				std::filesystem::rename(path, old, ec);
+			}
+
+			std::ofstream out(path, std::ios::app);
 			if (out) {
 				out << std::format("=== Session #{} — {} @ {} — {:.1f}s ===\n", summary.index, summary.startedAt, summary.location, summary.duration);
 				out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active)\n",
