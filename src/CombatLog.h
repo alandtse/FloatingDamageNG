@@ -7,11 +7,19 @@
 
 namespace FDNG
 {
-	// Combat analytics (spec §5, VR-CALM). Sessions open when the player enters
-	// combat and close when the threat register clears; per-combatant damage,
-	// healing, crits, time-to-die, and fled state accumulate in between. Session
+	// Combat analytics (spec §5, VR-CALM). Sessions open on combat (any
+	// participant, not just the player) and close once the player is out of
+	// combat AND damage has stopped flowing; per-combatant damage, healing,
+	// crits, time-to-die, and fled state accumulate in between. Session
 	// reports append to <SKSE logs>/FloatingDamageNG-combat.log and feed the
 	// live DPS readout.
+	//
+	// THREADING: the event sinks run on engine threads and only stash POD;
+	// everything else runs on the main thread (RecordDamage/RecordHeal are
+	// called from Capture::ProcessQueued, Tick from the render hook). Engine
+	// functions are never called while _lock is held — a sink thread waiting
+	// on _lock can hold engine locks, and taking them in the opposite order
+	// from under _lock deadlocks the game.
 	class CombatLog :
 		public RE::BSTEventSink<RE::TESCombatEvent>,
 		public RE::BSTEventSink<RE::TESDeathEvent>
@@ -85,6 +93,10 @@ namespace FDNG
 		Combatant& GetCombatant(RE::Actor* a_actor);
 		float SessionSeconds() const;
 
+		// Close only after the fight actually stops: the player being out of
+		// combat is not enough while NPCs are still trading blows.
+		static constexpr auto kIdleClose = std::chrono::seconds(4);
+
 		// Active-DPS gap rule (ACT/Details convention): time between player
 		// hits counts as "active" only up to this many seconds.
 		static constexpr float kActiveGap = 3.0f;
@@ -109,5 +121,12 @@ namespace FDNG
 		std::deque<SessionSummary> _history;
 
 		Clock::time_point _lastTickCheck{};
+		Clock::time_point _lastDamageAt{};
+
+		// Sink→main-thread handoff (POD only; sinks never take _lock).
+		std::atomic<RE::FormID> _combatHint{ 0 };
+		std::mutex _deathLock;
+		std::array<RE::FormID, 32> _deaths{};
+		std::size_t _deathCount{ 0 };
 	};
 }

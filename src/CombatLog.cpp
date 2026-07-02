@@ -67,6 +67,9 @@ namespace FDNG
 
 	CombatLog::Combatant& CombatLog::GetCombatant(RE::Actor* a_actor)
 	{
+		// Main thread, _lock held; the engine reads here are safe because no
+		// other thread contends _lock while also holding engine locks (sinks
+		// stash POD only) — but keep them minimal and first-touch only.
 		auto& c = _combatants[a_actor->GetFormID()];
 		if (c.name.empty()) {
 			const char* name = a_actor->GetName();
@@ -79,18 +82,25 @@ namespace FDNG
 
 	void CombatLog::EnsureSession(RE::Actor* a_hint)
 	{
+		// Main thread only; _sessionActive is mutated exclusively here and in
+		// CloseSession, so the unlocked pre-check is safe.
 		if (_sessionActive) {
 			return;
 		}
 		const auto player = RE::PlayerCharacter::GetSingleton();
-		// Spec §5: open on aggro/first blood involving the player's fight.
+		// A session is any fight worth logging — the player's own, or an
+		// NPC-only brawl flagged by the hint combatant.
 		if (!player || (!player->IsInCombat() && !(a_hint && a_hint->IsInCombat()))) {
 			return;
 		}
+		const auto location = CurrentLocationName();
+
+		std::scoped_lock lk{ _lock };
 		_sessionActive = true;
 		++_sessionIndex;
 		_sessionStart = Clock::now();
-		_location = CurrentLocationName();
+		_lastDamageAt = _sessionStart;
+		_location = location;
 		_combatants.clear();
 		_playerDamage = 0.0f;
 		_playerActiveSeconds = 0.0f;
@@ -105,11 +115,13 @@ namespace FDNG
 		if (!Settings::GetSingleton()->enableCombatLog || !a_victim) {
 			return;
 		}
-		std::scoped_lock lk{ _lock };
 		EnsureSession(a_victim);
 		if (!_sessionActive) {
 			return;
 		}
+
+		std::scoped_lock lk{ _lock };
+		_lastDamageAt = Clock::now();
 
 		const auto now = SessionSeconds();
 		auto& victim = GetCombatant(a_victim);
@@ -136,46 +148,36 @@ namespace FDNG
 
 	void CombatLog::RecordHeal(RE::Actor* a_target, float a_amount)
 	{
-		if (!Settings::GetSingleton()->enableCombatLog || !a_target) {
+		if (!Settings::GetSingleton()->enableCombatLog || !a_target || !_sessionActive) {
 			return;
 		}
 		std::scoped_lock lk{ _lock };
-		if (!_sessionActive) {
-			return;
-		}
+		_lastDamageAt = Clock::now();
 		GetCombatant(a_target).healingReceived += a_amount;
 	}
 
 	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::TESCombatEvent* a_event, RE::BSTEventSource<RE::TESCombatEvent>*)
 	{
-		if (!Settings::GetSingleton()->enableCombatLog || !a_event) {
+		// Engine thread — POD handoff only (see class comment).
+		if (!a_event || a_event->newState != RE::ACTOR_COMBAT_STATE::kCombat) {
 			return RE::BSEventNotifyControl::kContinue;
 		}
-		if (a_event->newState == RE::ACTOR_COMBAT_STATE::kCombat) {
-			const auto actor = a_event->actor ? a_event->actor->As<RE::Actor>() : nullptr;
-			const auto target = a_event->targetActor ? a_event->targetActor->As<RE::Actor>() : nullptr;
-			const auto player = RE::PlayerCharacter::GetSingleton();
-			if (actor == player || target == player || (actor && actor->IsInCombat())) {
-				std::scoped_lock lk{ _lock };
-				EnsureSession(actor);
-			}
+		if (const auto& actor = a_event->actor) {
+			_combatHint.store(actor->GetFormID(), std::memory_order_relaxed);
 		}
 		return RE::BSEventNotifyControl::kContinue;
 	}
 
 	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::TESDeathEvent* a_event, RE::BSTEventSource<RE::TESDeathEvent>*)
 	{
+		// Engine thread — POD handoff only (see class comment).
 		if (!a_event || !a_event->dead || !a_event->actorDying) {
 			return RE::BSEventNotifyControl::kContinue;
 		}
-		std::scoped_lock lk{ _lock };
-		if (!_sessionActive) {
-			return RE::BSEventNotifyControl::kContinue;
-		}
-		if (const auto dying = a_event->actorDying->As<RE::Actor>()) {
-			if (const auto it = _combatants.find(dying->GetFormID()); it != _combatants.end()) {
-				it->second.diedAt = SessionSeconds();
-			}
+		const auto id = a_event->actorDying->GetFormID();
+		std::scoped_lock lk{ _deathLock };
+		if (_deathCount < _deaths.size()) {
+			_deaths[_deathCount++] = id;
 		}
 		return RE::BSEventNotifyControl::kContinue;
 	}
@@ -185,6 +187,13 @@ namespace FDNG
 		if (!Settings::GetSingleton()->enableCombatLog) {
 			return;
 		}
+
+		// Combat-start hint from the event sink: open a session for NPC-only
+		// fights too (main thread, engine calls safe here).
+		if (const auto hintID = _combatHint.exchange(0, std::memory_order_relaxed)) {
+			EnsureSession(RE::TESForm::LookupByID<RE::Actor>(hintID));
+		}
+
 		// Cheap 1 Hz poll — combat-state exit has no reliable single event.
 		const auto now = Clock::now();
 		if (now - _lastTickCheck < std::chrono::seconds(1)) {
@@ -192,9 +201,29 @@ namespace FDNG
 		}
 		_lastTickCheck = now;
 
+		// Drain deaths recorded by the sink (up to ~1 s late; TTD tolerance).
+		std::array<RE::FormID, 32> deaths{};
+		std::size_t deathCount = 0;
+		{
+			std::scoped_lock lk{ _deathLock };
+			deathCount = _deathCount;
+			std::copy_n(_deaths.begin(), deathCount, deaths.begin());
+			_deathCount = 0;
+		}
+
+		// Engine reads happen before taking _lock (see class comment).
+		const auto player = RE::PlayerCharacter::GetSingleton();
+		const bool playerInCombat = player && player->IsInCombat();
+
 		std::scoped_lock lk{ _lock };
 		if (!_sessionActive) {
 			return;
+		}
+
+		for (std::size_t i = 0; i < deathCount; ++i) {
+			if (const auto it = _combatants.find(deaths[i]); it != _combatants.end()) {
+				it->second.diedAt = SessionSeconds();
+			}
 		}
 
 		// 1 Hz DPS timeline sample for the stats page graph.
@@ -203,8 +232,9 @@ namespace FDNG
 			_lastSampleDamage = _playerDamage;
 		}
 
-		const auto player = RE::PlayerCharacter::GetSingleton();
-		if (player && !player->IsInCombat()) {
+		// Close only once damage has stopped: NPC-only fights keep a session
+		// alive even though the player never enters combat.
+		if (!playerInCombat && now - _lastDamageAt > kIdleClose) {
 			CloseSession();
 		}
 	}
