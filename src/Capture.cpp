@@ -222,7 +222,9 @@ namespace FDNG
 		}
 		RawEvent raw;
 		raw.source = RawEvent::Source::kEffect;
-		raw.av = a_actorValue;
+		// The engine often passes kNone here and applies to the effect's own
+		// AV — resolve from the member in that case (plain read, safe here).
+		raw.av = a_actorValue != RE::ActorValue::kNone ? a_actorValue : a_effect->actorValue;
 		raw.victimID = a_target->GetFormID();
 		raw.amount = a_value;
 		// Safe on this thread: the effect is alive inside its own vfunc, the
