@@ -99,6 +99,16 @@ namespace FDNG::DevBench
 		}
 	}
 
+	bool IsConnected()
+	{
+		return g_devbench != nullptr;
+	}
+
+	unsigned int HostBuild()
+	{
+		return g_devbench ? g_devbench->GetBuildNumber() : 0;
+	}
+
 	void NotifySessionEnded(const CombatLog::SessionSummary& a_summary)
 	{
 		if (!g_devbench) {

@@ -16,4 +16,9 @@ namespace FDNG::DevBench
 	// Publish a finished session to /api/events (topic
 	// "floatingdamage.sessionEnded"). Safe to call when not connected.
 	void NotifySessionEnded(const CombatLog::SessionSummary& a_summary);
+
+	// Status for the config UI: registered with a host this session?
+	bool IsConnected();
+	// Host build number when connected, 0 otherwise.
+	unsigned int HostBuild();
 }
