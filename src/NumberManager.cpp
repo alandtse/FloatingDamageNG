@@ -144,8 +144,7 @@ namespace FDNG
 		// outward on a golden-angle spiral so rapid hits don't overlap.
 		const float angle = static_cast<float>(victimCount) * 2.399963f;
 		const float radius = kSpiralStep * static_cast<float>(victimCount);
-		n.anchor.x += radius * std::cos(angle);
-		n.anchor.y += radius * std::sin(angle);
+		n.spiral = { radius * std::cos(angle), radius * std::sin(angle), 0.0f };
 		n.arcDir = { std::cos(angle), std::sin(angle), 0.0f };
 
 		BuildText(n);
@@ -220,6 +219,14 @@ namespace FDNG
 				continue;
 			}
 
+			// Follow the victim while they're loaded (moving enemies, the
+			// player mid-heal); keep the last anchor when they unload.
+			if (const auto victim = RE::TESForm::LookupByID<RE::Actor>(n.victimID); victim && victim->Is3DLoaded()) {
+				if (const auto middle = victim->GetMiddleHighProcess(); middle && middle->headNode) {
+					n.anchor = middle->headNode->world.translate;
+				}
+			}
+
 			// Crowd attenuation (spec §3): scale/alpha tiers by who dealt the
 			// damage, with NPC-on-NPC culled entirely beyond the radius.
 			float scaleMult = 1.0f;
@@ -258,7 +265,7 @@ namespace FDNG
 
 			ResolvedNumber resolved;
 			resolved.number = &n;
-			resolved.worldPos = n.anchor + KinematicOffset(n);
+			resolved.worldPos = n.anchor + n.spiral + KinematicOffset(n);
 			resolved.scale = scaleMult * magnitudeScale;
 			resolved.alpha = alphaMult;
 			a_out.push_back(resolved);

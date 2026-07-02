@@ -372,9 +372,13 @@ namespace FDNG
 					}
 					stamp = now;
 				}
-				HitFlags flags;
-				flags.blocked = true;  // grey styling
-				EmitDamage(a_victim, caster, 0.0f, DamageKind::kMagic, flags, 0.0f, 0.0f, "RESISTED");
+				// Colored by the resisted element (fire-orange RESISTED on a
+				// flame atronach); all caps marks the 100% case.
+				auto kind = ClassifyMagicKind(mgef);
+				if (kind == DamageKind::kHealing) {
+					kind = DamageKind::kMagic;
+				}
+				EmitDamage(a_victim, caster, 0.0f, kind, HitFlags{}, 0.0f, 0.0f, "RESISTED");
 				return;
 			}
 			auto kind = ClassifyMagicKind(mgef);

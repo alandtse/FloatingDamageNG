@@ -13,7 +13,8 @@ namespace FDNG
 	{
 		bool active{ false };
 		RE::FormID victimID{ 0 };
-		RE::NiPoint3 anchor;  // world spawn point (spiral offset baked in)
+		RE::NiPoint3 anchor;  // victim head; refreshed each frame while the victim is loaded
+		RE::NiPoint3 spiral;  // anti-stacking displacement (fixed at spawn)
 		RE::NiPoint3 arcDir;  // horizontal unit direction for arc/radial motion
 		float age{ 0.0f };    // seconds since spawn
 		float lifetime{ 1.5f };
