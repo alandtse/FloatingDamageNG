@@ -155,24 +155,148 @@ namespace FDNG
 		_pendingHits[target->GetFormID()] = pending;
 	}
 
+	// ---- Hook entries: queue POD only (any thread) -------------------------
+
+	void Capture::QueueRaw(const RawEvent& a_event)
+	{
+		std::scoped_lock lk{ _rawLock };
+		if (_rawCount < kRawCapacity) {
+			_raw[_rawCount++] = a_event;
+		}
+	}
+
 	void Capture::OnHealthDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_damage)
 	{
-		const auto amount = -a_damage;  // engine passes damage as a negative delta
-		if (!a_victim || amount < Settings::GetSingleton()->minDamageToShow) {
+		if (!a_victim || a_damage >= 0.0f) {
+			return;
+		}
+		RawEvent raw;
+		raw.source = RawEvent::Source::kWeaponHit;
+		raw.victimID = a_victim->GetFormID();
+		raw.attackerID = a_attacker ? a_attacker->GetFormID() : 0;
+		raw.amount = a_damage;
+		QueueRaw(raw);
+	}
+
+	void Capture::OnHealthRestore(RE::Actor* a_target, float a_amount)
+	{
+		if (!a_target || a_amount <= 0.0f) {
+			return;
+		}
+		RawEvent raw;
+		raw.source = RawEvent::Source::kAVDelta;
+		raw.victimID = a_target->GetFormID();
+		raw.amount = a_amount;
+		QueueRaw(raw);
+	}
+
+	void Capture::OnMagicDamage(RE::Actor* a_victim, float a_amount)
+	{
+		if (!a_victim || a_amount <= 0.0f) {
+			return;
+		}
+		RawEvent raw;
+		raw.source = RawEvent::Source::kAVDelta;
+		raw.victimID = a_victim->GetFormID();
+		raw.amount = -a_amount;
+		QueueRaw(raw);
+	}
+
+	void Capture::OnResourceDamage(RE::Actor* a_victim, RE::ActorValue a_value, float a_amount)
+	{
+		if (!a_victim || a_amount <= 0.0f) {
+			return;
+		}
+		RawEvent raw;
+		raw.source = RawEvent::Source::kResource;
+		raw.av = a_value;
+		raw.victimID = a_victim->GetFormID();
+		raw.amount = -a_amount;
+		QueueRaw(raw);
+	}
+
+	void Capture::OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue)
+	{
+		if (!a_effect || !a_target || a_value == 0.0f) {
+			return;
+		}
+		RawEvent raw;
+		raw.source = RawEvent::Source::kEffect;
+		raw.av = a_actorValue;
+		raw.victimID = a_target->GetFormID();
+		raw.amount = a_value;
+		// Safe on this thread: the effect is alive inside its own vfunc, the
+		// handle table resolve is thread-safe, and GetFormID is a plain read.
+		if (const auto caster = a_effect->caster.get()) {
+			raw.attackerID = caster->GetFormID();
+		}
+		if (const auto mgef = a_effect->GetBaseObject()) {
+			raw.mgefID = mgef->GetFormID();
+		}
+		QueueRaw(raw);
+	}
+
+	// ---- Main-thread processing --------------------------------------------
+
+	void Capture::ProcessQueued()
+	{
+		std::array<RawEvent, kRawCapacity> batch;
+		std::size_t count = 0;
+		{
+			std::scoped_lock lk{ _rawLock };
+			count = _rawCount;
+			if (count == 0) {
+				return;
+			}
+			std::copy_n(_raw.begin(), count, batch.begin());
+			_rawCount = 0;
+		}
+
+		const auto settings = Settings::GetSingleton();
+		for (std::size_t i = 0; i < count; ++i) {
+			const auto& raw = batch[i];
+			const auto victim = RE::TESForm::LookupByID<RE::Actor>(raw.victimID);
+			if (!victim) {
+				continue;
+			}
+			if (settings->debugLog) {
+				logger::debug("Raw: src={} av={} victim={:08X} attacker={:08X} amount={:+.2f}",
+					std::to_underlying(raw.source), std::to_underlying(raw.av),
+					raw.victimID, raw.attackerID, raw.amount);
+			}
+			switch (raw.source) {
+			case RawEvent::Source::kWeaponHit:
+				ProcessWeaponHit(raw, victim);
+				break;
+			case RawEvent::Source::kAVDelta:
+				ProcessAVDelta(raw, victim);
+				break;
+			case RawEvent::Source::kEffect:
+				ProcessEffect(raw, victim);
+				break;
+			case RawEvent::Source::kResource:
+				ProcessResource(raw, victim);
+				break;
+			}
+		}
+	}
+
+	void Capture::ProcessWeaponHit(const RawEvent& a_raw, RE::Actor* a_victim)
+	{
+		const auto amount = -a_raw.amount;
+		if (amount < Settings::GetSingleton()->minDamageToShow) {
 			return;
 		}
 
-		// Weapon-hit path: HandleHealthDamage covers physical blows; magic and
-		// DoT ticks arrive via OnMagicDamage instead. The pending HitData
-		// contributes crit/block/sneak flags, mitigation, hit location, and
-		// the amplification estimate.
+		// The pending HitData contributes crit/block/sneak flags, mitigation,
+		// hit location, and the amplification estimate.
 		HitFlags flags;
 		float mitigated = 0.0f;
 		float ampMult = 0.0f;
 		char location[16]{};
 		{
 			std::scoped_lock lk{ _lock };
-			if (const auto it = _pendingHits.find(a_victim->GetFormID());
+			if (const auto it = _pendingHits.find(a_raw.victimID);
 				it != _pendingHits.end() && Clock::now() - it->second.stamp < kHitWindow) {
 				flags = it->second.flags;
 				mitigated = it->second.mitigated;
@@ -182,153 +306,152 @@ namespace FDNG
 			}
 		}
 
-		AuditRecord(a_victim->GetFormID(), -amount);
-		EmitDamage(a_victim, a_attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location);
+		const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
+		AuditRecord(a_raw.victimID, a_raw.amount);
+		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location);
 	}
 
-	void Capture::OnResourceDamage(RE::Actor* a_victim, RE::ActorValue a_value, float a_amount)
+	void Capture::ProcessAVDelta(const RawEvent& a_raw, RE::Actor* a_victim)
 	{
-		if (!a_victim || a_amount <= 0.0f) {
+		if (a_raw.amount > 0.0f) {
+			ProcessRestore(a_victim, a_raw.amount, nullptr);
 			return;
 		}
 
-		// Hostile attribution is mandatory: the caster's own spell costs,
-		// sprinting, and power attacks arrive as identical deltas.
-		DamageKind kind = a_value == RE::ActorValue::kMagicka ? DamageKind::kMagickaDrain : DamageKind::kStaminaDrain;
+		// Classify by the most recent hostile apply event; anything unmatched
+		// is falls/traps/script damage (effect damage arrives as kEffect with
+		// exact attribution).
+		DamageKind kind = DamageKind::kPhysical;
 		RE::Actor* attacker = nullptr;
-		bool hostile = false;
 		{
 			std::scoped_lock lk{ _lock };
-			if (const auto it = _recentMagic.find(a_victim->GetFormID());
-				it != _recentMagic.end() && Clock::now() - it->second.stamp < kMagicWindow && it->second.casterID != 0) {
-				attacker = RE::TESForm::LookupByID<RE::Actor>(it->second.casterID);
-				hostile = attacker != nullptr && attacker != a_victim;
-			}
-		}
-		// No effect-list walk here: this hook fires on arbitrary threads (job
-		// threads apply spell costs) while other threads mutate the list, and
-		// even the visitor crashes under that contention. Effect-sourced
-		// drains attribute exactly via OnEffectModify instead.
-		if (!hostile) {
-			return;
-		}
-
-		EmitPooledDamage(a_victim, attacker, a_amount, kind);
-	}
-
-	void Capture::AuditRecord(RE::FormID a_victimID, float a_delta)
-	{
-		if (!Settings::GetSingleton()->deltaAudit) {
-			return;
-		}
-		std::scoped_lock lk{ _lock };
-		_audit[a_victimID].capturedNet += a_delta;
-	}
-
-	void Capture::AuditTick()
-	{
-		if (!Settings::GetSingleton()->deltaAudit) {
-			return;
-		}
-		const auto now = Clock::now();
-		if (now - _lastAudit < std::chrono::seconds(1)) {
-			return;
-		}
-		_lastAudit = now;
-
-		std::scoped_lock lk{ _lock };
-		for (auto it = _audit.begin(); it != _audit.end();) {
-			const auto actor = RE::TESForm::LookupByID<RE::Actor>(it->first);
-			if (!actor || actor->IsDead()) {
-				it = _audit.erase(it);
-				continue;
-			}
-			const float health = actor->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth);
-			auto& entry = it->second;
-			if (entry.lastHealth >= 0.0f) {
-				// Observed net = captured net + regen (regen >= 0). If the
-				// observed change is meaningfully below the captured floor,
-				// damage bypassed both capture hooks.
-				const float observedNet = health - entry.lastHealth;
-				const float floorNet = entry.capturedNet;
-				if (observedNet < floorNet - 5.0f) {
-					logger::warn("[audit] '{}' [{:08X}]: observed {:+.1f} hp vs captured {:+.1f} — ~{:.1f} damage NOT captured",
-						actor->GetName(), it->first, observedNet, floorNet, floorNet - observedNet);
-				}
-			}
-			entry.lastHealth = health;
-			entry.capturedNet = 0.0f;
-			++it;
-		}
-	}
-
-	void Capture::OnMagicDamage(RE::Actor* a_victim, float a_amount)
-	{
-		const auto settings = Settings::GetSingleton();
-		if (!a_victim || a_amount <= 0.0f) {
-			return;
-		}
-
-		// Classify by the most recent hostile apply event. No active-effect
-		// walk fallback: this hook fires on arbitrary threads while other
-		// threads mutate the effect list (crashes even through the visitor);
-		// effect-sourced damage classifies exactly in OnEffectModify anyway,
-		// so anything unmatched here is falls/traps/script damage.
-		DamageKind kind = DamageKind::kMagic;
-		RE::Actor* attacker = nullptr;
-		bool classified = false;
-		{
-			std::scoped_lock lk{ _lock };
-			if (const auto it = _recentMagic.find(a_victim->GetFormID());
+			if (const auto it = _recentMagic.find(a_raw.victimID);
 				it != _recentMagic.end() && Clock::now() - it->second.stamp < kMagicWindow) {
 				kind = it->second.kind;
 				if (it->second.casterID != 0) {
 					attacker = RE::TESForm::LookupByID<RE::Actor>(it->second.casterID);
 				}
-				classified = true;
 			}
 		}
-		if (!classified) {
-			kind = DamageKind::kPhysical;  // falls, traps, script damage
-		}
 
-		AuditRecord(a_victim->GetFormID(), -a_amount);
-		EmitPooledDamage(a_victim, attacker, a_amount, kind);
+		AuditRecord(a_raw.victimID, a_raw.amount);
+		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind);
 	}
 
-	void Capture::OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue)
+	void Capture::ProcessEffect(const RawEvent& a_raw, RE::Actor* a_victim)
 	{
 		const auto settings = Settings::GetSingleton();
-		if (!a_effect || !a_target || a_value == 0.0f) {
-			return;
-		}
+		const auto mgef = a_raw.mgefID ? RE::TESForm::LookupByID<RE::EffectSetting>(a_raw.mgefID) : nullptr;
+		const auto caster = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
 
-		const auto mgef = a_effect->GetBaseObject();
-		const auto caster = a_effect->caster.get().get();
-
-		if (a_actorValue == RE::ActorValue::kHealth) {
-			if (a_value > 0.0f) {
-				OnHealthRestore(a_target, a_value);  // has its own gates + pooling + analytics
+		if (a_raw.av == RE::ActorValue::kHealth) {
+			if (a_raw.amount > 0.0f) {
+				ProcessRestore(a_victim, a_raw.amount, caster);
 				return;
 			}
-			const auto kind = ClassifyMagicKind(mgef);
-			AuditRecord(a_target->GetFormID(), a_value);
-			EmitPooledDamage(a_target, caster, -a_value, kind == DamageKind::kHealing ? DamageKind::kMagic : kind);
+			auto kind = ClassifyMagicKind(mgef);
+			if (kind == DamageKind::kHealing) {
+				kind = DamageKind::kMagic;
+			}
+			AuditRecord(a_raw.victimID, a_raw.amount);
+			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind);
 			return;
 		}
 
-		if (a_value < 0.0f &&
-			((a_actorValue == RE::ActorValue::kMagicka && settings->showMagickaDamage) ||
-				(a_actorValue == RE::ActorValue::kStamina && settings->showStaminaDamage))) {
-			// Hostile-only: a caster's own costs never come through effects,
-			// but beneficial effects with resource costs do — require a
+		if (a_raw.amount < 0.0f &&
+			((a_raw.av == RE::ActorValue::kMagicka && settings->showMagickaDamage) ||
+				(a_raw.av == RE::ActorValue::kStamina && settings->showStaminaDamage))) {
+			// Hostile-only: self costs never come through effects, but
+			// beneficial effects with resource costs do — require a
 			// detrimental effect from someone else.
-			if (!mgef || !(mgef->IsHostile() || mgef->IsDetrimental()) || !caster || caster == a_target) {
+			if (!mgef || !(mgef->IsHostile() || mgef->IsDetrimental()) || !caster || caster == a_victim) {
 				return;
 			}
-			const auto kind = a_actorValue == RE::ActorValue::kMagicka ? DamageKind::kMagickaDrain : DamageKind::kStaminaDrain;
-			EmitPooledDamage(a_target, caster, -a_value, kind);
+			const auto kind = a_raw.av == RE::ActorValue::kMagicka ? DamageKind::kMagickaDrain : DamageKind::kStaminaDrain;
+			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind);
 		}
+	}
+
+	void Capture::ProcessResource(const RawEvent& a_raw, RE::Actor* a_victim)
+	{
+		// Hostile attribution is mandatory: the caster's own spell costs,
+		// sprinting, and power attacks arrive as identical deltas.
+		RE::Actor* attacker = nullptr;
+		{
+			std::scoped_lock lk{ _lock };
+			if (const auto it = _recentMagic.find(a_raw.victimID);
+				it != _recentMagic.end() && Clock::now() - it->second.stamp < kMagicWindow && it->second.casterID != 0) {
+				attacker = RE::TESForm::LookupByID<RE::Actor>(it->second.casterID);
+			}
+		}
+		if (!attacker || attacker == a_victim) {
+			return;
+		}
+
+		const auto kind = a_raw.av == RE::ActorValue::kMagicka ? DamageKind::kMagickaDrain : DamageKind::kStaminaDrain;
+		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind);
+	}
+
+	void Capture::ProcessRestore(RE::Actor* a_target, float a_amount, RE::Actor* a_healer)
+	{
+		const auto settings = Settings::GetSingleton();
+		if (!settings->showHealing) {
+			return;
+		}
+
+		const auto origin = ClassifyOrigin(a_target, a_healer);
+		if (origin == OriginTier::kNPC && !settings->showNPCOnNPCDamage) {
+			return;
+		}
+
+		// Only heals that repair actual damage are visible in-game; a
+		// full-health actor's restore calls are engine bookkeeping.
+		if (a_target->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth) >= -0.01f) {
+			return;
+		}
+
+		AuditRecord(a_target->GetFormID(), a_amount);
+
+		// Accumulate ticks: healing effects apply per frame in sub-point
+		// deltas. Only a stream that clears the threshold within the window is
+		// a real heal; natural regen never gets there and silently expires.
+		const auto now = Clock::now();
+		float emit = 0.0f;
+		{
+			std::scoped_lock lk{ _lock };
+			auto& accum = _healAccums[a_target->GetFormID()];
+			if (accum.amount == 0.0f || now - accum.windowStart > kHealWindow) {
+				accum.windowStart = now;
+				accum.amount = 0.0f;
+			}
+			accum.amount += a_amount;
+			if (accum.amount >= settings->minHealToShow) {
+				emit = accum.amount;
+				// Keep the window open so the ongoing stream merges into the
+				// same on-screen number via the DoT accumulator.
+				accum.amount = 0.0f;
+				accum.windowStart = now;
+			}
+		}
+		if (emit <= 0.0f) {
+			return;
+		}
+
+		CombatLog::GetSingleton()->RecordHeal(a_target, emit);
+
+		DamageEvent event;
+		event.victimID = a_target->GetFormID();
+		event.anchor = GetAnchorPos(a_target);
+		event.amount = emit;
+		event.kind = DamageKind::kHealing;
+		event.origin = origin;
+
+		if (settings->debugLog) {
+			logger::debug("Heal: target={:08X} amount={:.1f} origin={}",
+				event.victimID, event.amount, std::to_underlying(event.origin));
+		}
+
+		NumberManager::GetSingleton()->Enqueue(event);
 	}
 
 	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind)
@@ -399,9 +522,7 @@ namespace FDNG
 			}
 			break;
 		case OriginTier::kPlayerVictim:
-			// Spawned regardless of camera; the renderer suppresses player
-			// numbers while in first person (flat and VR alike), so VR third
-			// person still shows them (spec §4's head-locked mode comes later).
+			// The renderer pins/suppresses player numbers per camera mode.
 			if (!settings->showPlayerDamageTaken) {
 				return;
 			}
@@ -417,65 +538,49 @@ namespace FDNG
 		NumberManager::GetSingleton()->Enqueue(event);
 	}
 
-	void Capture::OnHealthRestore(RE::Actor* a_target, float a_amount)
+	void Capture::AuditRecord(RE::FormID a_victimID, float a_delta)
 	{
-		const auto settings = Settings::GetSingleton();
-		if (!a_target || a_amount <= 0.0f || !settings->showHealing) {
+		if (!Settings::GetSingleton()->deltaAudit) {
 			return;
 		}
+		std::scoped_lock lk{ _lock };
+		_audit[a_victimID].capturedNet += a_delta;
+	}
 
-		const auto origin = ClassifyOrigin(a_target, nullptr);  // healer unknown here; tier by the recipient
-		if (origin == OriginTier::kNPC && !settings->showNPCOnNPCDamage) {
+	void Capture::AuditTick()
+	{
+		if (!Settings::GetSingleton()->deltaAudit) {
 			return;
 		}
-
-		// Only heals that repair actual damage are visible in-game; a full-health
-		// actor's restore calls are engine bookkeeping.
-		if (a_target->GetActorValueModifier(RE::ACTOR_VALUE_MODIFIER::kDamage, RE::ActorValue::kHealth) >= -0.01f) {
-			return;
-		}
-
-		AuditRecord(a_target->GetFormID(), a_amount);
-
-		// Accumulate ticks: healing effects apply per frame in sub-point deltas.
-		// Only a stream that clears the threshold within the window is a real
-		// heal; natural regen never gets there and silently expires.
 		const auto now = Clock::now();
-		float emit = 0.0f;
-		{
-			std::scoped_lock lk{ _lock };
-			auto& accum = _healAccums[a_target->GetFormID()];
-			if (accum.amount == 0.0f || now - accum.windowStart > kHealWindow) {
-				accum.windowStart = now;
-				accum.amount = 0.0f;
-			}
-			accum.amount += a_amount;
-			if (accum.amount >= settings->minHealToShow) {
-				emit = accum.amount;
-				// Keep the window open so the ongoing stream merges into the
-				// same on-screen number via the DoT accumulator.
-				accum.amount = 0.0f;
-				accum.windowStart = now;
-			}
-		}
-		if (emit <= 0.0f) {
+		if (now - _lastAudit < std::chrono::seconds(1)) {
 			return;
 		}
+		_lastAudit = now;
 
-		CombatLog::GetSingleton()->RecordHeal(a_target, emit);
-
-		DamageEvent event;
-		event.victimID = a_target->GetFormID();
-		event.anchor = GetAnchorPos(a_target);
-		event.amount = emit;
-		event.kind = DamageKind::kHealing;
-		event.origin = origin;
-
-		if (settings->debugLog) {
-			logger::debug("Heal: target={:08X} amount={:.1f} origin={}",
-				event.victimID, event.amount, std::to_underlying(event.origin));
+		std::scoped_lock lk{ _lock };
+		for (auto it = _audit.begin(); it != _audit.end();) {
+			const auto actor = RE::TESForm::LookupByID<RE::Actor>(it->first);
+			if (!actor || actor->IsDead()) {
+				it = _audit.erase(it);
+				continue;
+			}
+			const float health = actor->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth);
+			auto& entry = it->second;
+			if (entry.lastHealth >= 0.0f) {
+				// Observed net = captured net + regen (regen >= 0). If the
+				// observed change is meaningfully below the captured floor,
+				// damage bypassed both capture hooks.
+				const float observedNet = health - entry.lastHealth;
+				const float floorNet = entry.capturedNet;
+				if (observedNet < floorNet - 5.0f) {
+					logger::warn("[audit] '{}' [{:08X}]: observed {:+.1f} hp vs captured {:+.1f} — ~{:.1f} damage NOT captured",
+						actor->GetName(), it->first, observedNet, floorNet, floorNet - observedNet);
+				}
+			}
+			entry.lastHealth = health;
+			entry.capturedNet = 0.0f;
+			++it;
 		}
-
-		NumberManager::GetSingleton()->Enqueue(event);
 	}
 }

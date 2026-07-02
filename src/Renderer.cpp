@@ -348,6 +348,9 @@ namespace FDNG::Renderer
 					return;
 				}
 
+				// Drain the raw hook queue on the main thread — the hooks fire
+				// on job/script threads and only capture POD.
+				Capture::GetSingleton()->ProcessQueued();
 				CombatLog::GetSingleton()->Tick();
 				Capture::GetSingleton()->AuditTick();
 
