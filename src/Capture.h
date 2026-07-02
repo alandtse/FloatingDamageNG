@@ -69,12 +69,11 @@ namespace FDNG
 		// Ticks accumulate per actor until they clear the regen-noise threshold.
 		void OnHealthRestore(RE::Actor* a_target, float a_amount);
 
-		// From the ModActorValue vfunc hook (game thread): a negative kDamage
-		// delta on Health that did NOT come through HandleHealthDamage — magic,
-		// enchantments, DoT ticks, script damage. Classified via the recent
-		// apply events, falling back to a VR-safe walk of the victim's active
-		// effects (MagicTarget::VisitEffects — never GetActiveEffectList, which
-		// is a thread-local shim on VR and unsafe under contention).
+		// From the ModActorValue vfunc hook (ANY thread — job threads apply AV
+		// deltas): a negative kDamage delta on Health that came through neither
+		// HandleHealthDamage nor an effect — script damage, falls, traps.
+		// Classified via the recent apply events only; never walks the
+		// active-effect list (mutated concurrently by other threads).
 		void OnMagicDamage(RE::Actor* a_victim, float a_amount);
 
 		// Negative kDamage delta on Magicka/Stamina. Displayed only when it
@@ -152,11 +151,6 @@ namespace FDNG
 		// Heal ticks that don't reach the display threshold within this window
 		// are natural regen trickle — discard them.
 		static constexpr auto kHealWindow = std::chrono::milliseconds(1500);
-
-		// Try to attribute a resource-damaging effect on the victim via the
-		// VR-safe visitor. Matches detrimental effects whose primary or
-		// secondary AV is a_value. Returns false when nothing matches.
-		static bool FindHostileEffect(RE::Actor* a_victim, RE::ActorValue a_value, DamageKind& a_kindOut, RE::Actor*& a_attackerOut);
 
 		void AuditRecord(RE::FormID a_victimID, float a_delta);  // negative = damage
 

@@ -76,54 +76,6 @@ namespace FDNG
 		return DamageKind::kMagic;
 	}
 
-	bool Capture::FindHostileEffect(RE::Actor* a_victim, RE::ActorValue a_value, DamageKind& a_kindOut, RE::Actor*& a_attackerOut)
-	{
-		struct StrongestEffect : RE::MagicTarget::ForEachActiveEffectVisitor
-		{
-			explicit StrongestEffect(RE::ActorValue a_av) :
-				av(a_av) {}
-
-			RE::BSContainer::ForEachResult Accept(RE::ActiveEffect* a_effect) override
-			{
-				if (!a_effect || a_effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled)) {
-					return RE::BSContainer::ForEachResult::kContinue;
-				}
-				const auto mgef = a_effect->GetBaseObject();
-				if (!mgef || !(mgef->IsHostile() || mgef->IsDetrimental())) {
-					return RE::BSContainer::ForEachResult::kContinue;
-				}
-				// Shock/frost damage the secondary AV (magicka/stamina) of a
-				// health-primary effect, so match either slot.
-				if (mgef->data.primaryAV != av && mgef->data.secondaryAV != av) {
-					return RE::BSContainer::ForEachResult::kContinue;
-				}
-				const float strength = std::fabs(a_effect->magnitude);
-				if (strength > bestStrength) {
-					bestStrength = strength;
-					best = a_effect;
-				}
-				return RE::BSContainer::ForEachResult::kContinue;
-			}
-
-			RE::ActorValue av;
-			RE::ActiveEffect* best{ nullptr };
-			float bestStrength{ -1.0f };
-		};
-
-		const auto magicTarget = a_victim->GetMagicTarget();
-		if (!magicTarget) {
-			return false;
-		}
-		StrongestEffect visitor{ a_value };
-		magicTarget->VisitEffects(visitor);
-		if (!visitor.best) {
-			return false;
-		}
-		a_kindOut = ClassifyMagicKind(visitor.best->GetBaseObject());
-		a_attackerOut = visitor.best->caster.get().get();
-		return true;
-	}
-
 	RE::BSEventNotifyControl Capture::ProcessEvent(const RE::TESMagicEffectApplyEvent* a_event, RE::BSTEventSource<RE::TESMagicEffectApplyEvent>*)
 	{
 		if (!a_event || !a_event->target) {
@@ -253,10 +205,10 @@ namespace FDNG
 				hostile = attacker != nullptr && attacker != a_victim;
 			}
 		}
-		if (!hostile) {
-			DamageKind ignoredKind;
-			hostile = FindHostileEffect(a_victim, a_value, ignoredKind, attacker) && attacker != a_victim;
-		}
+		// No effect-list walk here: this hook fires on arbitrary threads (job
+		// threads apply spell costs) while other threads mutate the list, and
+		// even the visitor crashes under that contention. Effect-sourced
+		// drains attribute exactly via OnEffectModify instead.
 		if (!hostile) {
 			return;
 		}
@@ -317,10 +269,11 @@ namespace FDNG
 			return;
 		}
 
-		// Classify by the most recent hostile apply event; fall back to the
-		// VR-safe active-effect walk (visitor — GetActiveEffectList is a
-		// thread-local shim on VR and unsafe when other threads touch the
-		// effect list, which is likely with many actors in combat).
+		// Classify by the most recent hostile apply event. No active-effect
+		// walk fallback: this hook fires on arbitrary threads while other
+		// threads mutate the effect list (crashes even through the visitor);
+		// effect-sourced damage classifies exactly in OnEffectModify anyway,
+		// so anything unmatched here is falls/traps/script damage.
 		DamageKind kind = DamageKind::kMagic;
 		RE::Actor* attacker = nullptr;
 		bool classified = false;
@@ -334,9 +287,6 @@ namespace FDNG
 				}
 				classified = true;
 			}
-		}
-		if (!classified) {
-			classified = FindHostileEffect(a_victim, RE::ActorValue::kHealth, kind, attacker);
 		}
 		if (!classified) {
 			kind = DamageKind::kPhysical;  // falls, traps, script damage
