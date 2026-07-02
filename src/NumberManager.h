@@ -22,6 +22,7 @@ namespace FDNG
 		float mitigated{ 0.0f };
 		float ampMult{ 0.0f };
 		char location[16]{};
+		MitigationLabel mitLabel{ MitigationLabel::kResisted };
 		DamageKind kind{ DamageKind::kPhysical };
 		OriginTier origin{ OriginTier::kNPC };
 		HitFlags flags;

@@ -132,7 +132,8 @@ namespace FDNG
 		PendingHit pending;
 		pending.stamp = Clock::now();
 		pending.physicalDamage = a_hitData.physicalDamage;
-		pending.mitigated = std::max(0.0f, a_hitData.resistedPhysicalDamage) + std::max(0.0f, a_hitData.resistedTypedDamage);
+		pending.resistedPhysical = std::max(0.0f, a_hitData.resistedPhysicalDamage);
+		pending.resistedTyped = std::max(0.0f, a_hitData.resistedTypedDamage);
 		pending.flags.critical = a_hitData.flags.any(RE::HitData::Flag::kCritical);
 		pending.flags.blocked = a_hitData.flags.any(RE::HitData::Flag::kBlocked);
 		pending.flags.sneak = a_hitData.flags.any(RE::HitData::Flag::kSneakAttack);
@@ -323,12 +324,20 @@ namespace FDNG
 		float mitigated = 0.0f;
 		float ampMult = 0.0f;
 		char location[16]{};
+		auto mitLabel = MitigationLabel::kArmor;
 		{
 			std::scoped_lock lk{ _lock };
 			if (const auto it = _pendingHits.find(a_raw.victimID);
 				it != _pendingHits.end() && Clock::now() - it->second.stamp < kHitWindow) {
 				flags = it->second.flags;
-				mitigated = it->second.mitigated;
+				mitigated = it->second.resistedPhysical + it->second.resistedTyped;
+				// Word by dominant cause: a real block > armor soak > the
+				// enchant portion being magically resisted.
+				if (flags.blocked) {
+					mitLabel = MitigationLabel::kBlocked;
+				} else if (it->second.resistedTyped > it->second.resistedPhysical) {
+					mitLabel = MitigationLabel::kResisted;
+				}
 				ampMult = it->second.ampMult;
 				std::memcpy(location, it->second.location, sizeof(location));
 				_pendingHits.erase(it);
@@ -337,7 +346,7 @@ namespace FDNG
 
 		const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
 		AuditRecord(a_raw.victimID, a_raw.amount);
-		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location);
+		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel);
 	}
 
 	void Capture::ProcessAVDelta(const RawEvent& a_raw, RE::Actor* a_victim)
@@ -552,7 +561,7 @@ namespace FDNG
 	}
 
 	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
-		float a_ampMult, const char* a_location)
+		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel)
 	{
 		const auto settings = Settings::GetSingleton();
 		const auto origin = ClassifyOrigin(a_victim, a_attacker);
@@ -569,6 +578,7 @@ namespace FDNG
 		if (a_location && a_location[0]) {
 			std::snprintf(event.location, sizeof(event.location), "%s", a_location);
 		}
+		event.mitLabel = a_mitLabel;
 		event.kind = a_kind;
 		event.origin = origin;
 		event.flags = a_flags;

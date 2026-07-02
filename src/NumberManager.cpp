@@ -65,12 +65,15 @@ namespace FDNG
 		const auto settings = Settings::GetSingleton();
 		const bool showMit = settings->showMitigation && a_number.mitigated >= 1.0f;
 		const bool showAmp = a_number.ampMult > 0.0f;
+		const char* mitWord = a_number.mitLabel == MitigationLabel::kBlocked ? "blocked" :
+		                      a_number.mitLabel == MitigationLabel::kArmor   ? "armor" :
+		                                                                       "resisted";
 		if (showMit && showAmp) {
-			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "(-%d resisted) x%.1f",
-				static_cast<int>(std::lround(a_number.mitigated)), a_number.ampMult);
+			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "(-%d %s) x%.1f",
+				static_cast<int>(std::lround(a_number.mitigated)), mitWord, a_number.ampMult);
 		} else if (showMit) {
-			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "(-%d resisted)",
-				static_cast<int>(std::lround(a_number.mitigated)));
+			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "(-%d %s)",
+				static_cast<int>(std::lround(a_number.mitigated)), mitWord);
 		} else if (showAmp) {
 			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "x%.1f", a_number.ampMult);
 		}
@@ -135,6 +138,7 @@ namespace FDNG
 		n.mitigated = a_event.mitigated;
 		n.ampMult = a_event.ampMult;
 		std::memcpy(n.location, a_event.location, sizeof(n.location));
+		n.mitLabel = a_event.mitLabel;
 		n.kind = a_event.kind;
 		n.origin = a_event.origin;
 		n.flags = a_event.flags;

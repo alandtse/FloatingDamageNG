@@ -34,15 +34,24 @@ namespace FDNG
 		bool powerAttack{ false };
 	};
 
+	// Word used for the mitigation subtext — mitigation has different causes.
+	enum class MitigationLabel : std::uint8_t
+	{
+		kResisted = 0,  // magical resistance (spells, enchant payloads)
+		kBlocked,       // an actual shield/weapon block
+		kArmor,         // armor rating on a physical blow
+	};
+
 	// One classified damage application, ready to display.
 	struct DamageEvent
 	{
 		RE::FormID victimID{ 0 };
 		RE::NiPoint3 anchor;  // world-space spawn point (victim head)
 		float amount{ 0.0f };
-		float mitigated{ 0.0f };  // resisted/blocked portion, for the subtext
+		float mitigated{ 0.0f };  // resisted/blocked/armor portion, for the subtext
 		float ampMult{ 0.0f };    // implied external multiplier (0 = none)
 		char location[16]{};      // locational tag (e.g. "HEADSHOT"), empty = none
+		MitigationLabel mitLabel{ MitigationLabel::kResisted };
 		DamageKind kind{ DamageKind::kPhysical };
 		OriginTier origin{ OriginTier::kNPC };
 		HitFlags flags;
@@ -110,7 +119,8 @@ namespace FDNG
 		{
 			Clock::time_point stamp;
 			float physicalDamage{ 0.0f };
-			float mitigated{ 0.0f };
+			float resistedPhysical{ 0.0f };  // armor
+			float resistedTyped{ 0.0f };     // enchant payload resisted
 			float ampMult{ 0.0f };
 			char location[16]{};
 			HitFlags flags;
@@ -151,7 +161,8 @@ namespace FDNG
 
 		// Shared tail: analytics, display filters, spawn. Main thread.
 		void EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
-			float a_ampMult = 0.0f, const char* a_location = nullptr);
+			float a_ampMult = 0.0f, const char* a_location = nullptr,
+			MitigationLabel a_mitLabel = MitigationLabel::kResisted);
 
 		// EmitDamage with sub-threshold tick pooling (concentration spells
 		// apply in sub-point per-frame deltas).
