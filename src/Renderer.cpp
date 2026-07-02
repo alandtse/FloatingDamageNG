@@ -120,7 +120,14 @@ namespace FDNG::Renderer
 			const auto& n = *a_rn.number;
 			ImFont* font = ImGui::GetFont();
 			const float mainPx = a_fontPx;
-			const float subPx = a_fontPx * kSubtextRatio;
+			// The subtext grows with the resisted share, so a mostly-resisted
+			// hit reads at a glance.
+			float subRatio = kSubtextRatio;
+			if (n.mitigated > 0.0f && n.amount > 0.0f) {
+				const float resistShare = n.mitigated / (n.mitigated + n.amount);
+				subRatio = 0.40f + 0.35f * resistShare;
+			}
+			const float subPx = a_fontPx * subRatio;
 
 			const ImVec2 mainSz = font->CalcTextSizeA(mainPx, FLT_MAX, 0.0f, n.text);
 			ImVec2 blockSz = mainSz;

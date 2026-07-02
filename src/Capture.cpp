@@ -21,6 +21,28 @@ namespace FDNG
 			return pos;
 		}
 
+		// Estimated fraction of incoming magic the victim resists, from their
+		// live resist AVs (elemental x magic resist, engine-capped at 85%
+		// each; poison ignores magic resist). Robust for both instant hits
+		// and concentration ticks, unlike comparing applied vs magnitude.
+		float ResistFraction(RE::Actor* a_victim, const RE::EffectSetting* a_mgef)
+		{
+			if (!a_mgef) {
+				return 0.0f;
+			}
+			const auto avo = a_victim->AsActorValueOwner();
+			const auto resistAV = a_mgef->data.resistVariable;
+			if (!avo || resistAV == RE::ActorValue::kNone) {
+				return 0.0f;
+			}
+			const auto capped = [&](RE::ActorValue a_av) {
+				return std::clamp(avo->GetActorValue(a_av), 0.0f, 85.0f) / 100.0f;
+			};
+			const float elemental = capped(resistAV);
+			const float magic = resistAV == RE::ActorValue::kPoisonResist ? 0.0f : capped(RE::ActorValue::kResistMagic);
+			return std::clamp(1.0f - (1.0f - elemental) * (1.0f - magic), 0.0f, 0.95f);
+		}
+
 		OriginTier ClassifyOrigin(RE::Actor* a_victim, RE::Actor* a_attacker)
 		{
 			const auto player = RE::PlayerCharacter::GetSingleton();
@@ -385,8 +407,17 @@ namespace FDNG
 			if (kind == DamageKind::kHealing) {
 				kind = DamageKind::kMagic;
 			}
+			// Resisted-portion estimate for the subtext, from the victim's
+			// live resist values: pre-resist = applied / (1 - f).
+			float mitigated = 0.0f;
+			if (settings->showMitigation) {
+				const float f = ResistFraction(a_victim, mgef);
+				if (f > 0.01f) {
+					mitigated = -a_raw.amount * f / (1.0f - f);
+				}
+			}
 			AuditRecord(a_raw.victimID, a_raw.amount);
-			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind);
+			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind, mitigated);
 			return;
 		}
 
@@ -486,13 +517,14 @@ namespace FDNG
 		NumberManager::GetSingleton()->Enqueue(event);
 	}
 
-	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind)
+	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated)
 	{
 		const auto settings = Settings::GetSingleton();
 
 		// Concentration spells tick in sub-point deltas; pool them per
 		// victim+type until they clear the display threshold.
 		float emit = a_amount;
+		float emitMitigated = a_mitigated;
 		if (a_amount < settings->minDamageToShow) {
 			const auto now = Clock::now();
 			const auto key = static_cast<std::uint64_t>(a_victim->GetFormID()) |
@@ -502,17 +534,21 @@ namespace FDNG
 			if (accum.amount == 0.0f || now - accum.windowStart > kMagicWindow) {
 				accum.windowStart = now;
 				accum.amount = 0.0f;
+				accum.mitigated = 0.0f;
 			}
 			accum.amount += a_amount;
+			accum.mitigated += a_mitigated;
 			if (accum.amount < settings->minDamageToShow) {
 				return;
 			}
 			emit = accum.amount;
+			emitMitigated = accum.mitigated;
 			accum.amount = 0.0f;
+			accum.mitigated = 0.0f;
 			accum.windowStart = now;
 		}
 
-		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, 0.0f);
+		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, emitMitigated);
 	}
 
 	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,

@@ -135,6 +135,7 @@ namespace FDNG
 		{
 			Clock::time_point windowStart;
 			float amount{ 0.0f };
+			float mitigated{ 0.0f };
 		};
 
 		static DamageKind ClassifyMagicKind(const RE::EffectSetting* a_mgef);
@@ -154,7 +155,7 @@ namespace FDNG
 
 		// EmitDamage with sub-threshold tick pooling (concentration spells
 		// apply in sub-point per-frame deltas).
-		void EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind);
+		void EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated = 0.0f);
 
 		// Correlation windows: a weapon hit's HandleHealthDamage lands the same
 		// frame; magic apply can precede its first damage tick by a bit longer.
