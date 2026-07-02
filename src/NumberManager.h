@@ -30,14 +30,18 @@ namespace FDNG
 		char subtext[28]{};  // "(-45 resisted)" / "(-45 resisted) x2.5"
 	};
 
-	// Per-frame, per-number draw parameters resolved by Resolve().
+	// Per-frame, per-number draw parameters resolved by Resolve(); the
+	// projection fields are filled by the renderer's shared camera pass.
 	struct ResolvedNumber
 	{
 		const Number* number{ nullptr };
 		RE::NiPoint3 worldPos;  // anchor + kinematic offset
 		float scale{ 1.0f };
 		float alpha{ 1.0f };
-		bool inView{ true };  // camera-frustum test, filled by the renderer
+		float screenX{ 0.0f };  // normalized camera projection (y up)
+		float screenY{ 0.0f };
+		bool projected{ false };  // in front of the camera with valid coords
+		bool inView{ true };      // projected within the margined frustum (NPC numbers only)
 	};
 
 	class NumberManager

@@ -151,6 +151,26 @@ namespace FDNG::Renderer
 			return blockSz;
 		}
 
+		// Shared camera pass (flat and VR — the VR camera tracks the HMD):
+		// fills each resolved number's normalized screen coords, whether it
+		// projects in front of the camera, and — for NPC-on-NPC numbers — an
+		// in-view flag with a 30% margin so head/camera motion doesn't pop
+		// numbers at the edge. Player-relevant numbers always count as in
+		// view: the renderers re-anchor them in first person, so their
+		// pre-anchor position must not demote them.
+		void ProjectResolved()
+		{
+			const auto camera = RE::Main::WorldRootCamera();
+			for (auto& rn : g_resolved) {
+				float x = 0.0f, y = 0.0f, z = -1.0f;
+				rn.projected = camera && camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) && z > 0.0f;
+				rn.screenX = x;
+				rn.screenY = y;
+				rn.inView = rn.number->origin != OriginTier::kNPC ||
+				            (rn.projected && x > -0.3f && x < 1.3f && y > -0.3f && y < 1.3f);
+			}
+		}
+
 		// VR: lay each number into its own sub-rect of the helper panel and
 		// record a world-space billboard pointing at that sub-rect.
 		void DrawWorldQuadFrame()
@@ -185,18 +205,10 @@ namespace FDNG::Renderer
 			}
 
 			// Panel space is finite and busy battles overflow it, so pack in
-			// priority order: numbers actually in view first (the HMD-tracked
-			// camera projection, with margin so head motion doesn't pop them),
-			// then the player's own numbers, then NPC-on-NPC nearest-first.
+			// priority order: numbers actually in view first, then the
+			// player's own numbers, then NPC-on-NPC nearest-first.
 			// Out-of-view numbers still pack while space remains — they only
 			// lose when something visible needs the room.
-			if (const auto camera = RE::Main::WorldRootCamera()) {
-				for (auto& rn : g_resolved) {
-					float x = 0.0f, y = 0.0f, z = -1.0f;
-					rn.inView = camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) &&
-					            z > 0.0f && x > -0.3f && x < 1.3f && y > -0.3f && y < 1.3f;
-				}
-			}
 			const auto anchorPos = player ? player->GetPosition() : RE::NiPoint3{};
 			std::sort(g_resolved.begin(), g_resolved.end(), [&](const ResolvedNumber& a, const ResolvedNumber& b) {
 				if (a.inView != b.inView) {
@@ -282,14 +294,9 @@ namespace FDNG::Renderer
 			ImGui::End();
 		}
 
-		// Flat: project each number to the screen and draw it directly.
+		// Flat: draw each number at its projected screen position.
 		void DrawFlatFrame()
 		{
-			const auto camera = RE::Main::WorldRootCamera();
-			if (!camera) {
-				return;
-			}
-
 			ImGui::SetNextWindowPos({ 0.0f, 0.0f });
 			ImGui::SetNextWindowSize(ImGui::GetIO().DisplaySize);
 			ImGui::Begin("##FDNG", nullptr,
@@ -318,11 +325,10 @@ namespace FDNG::Renderer
 						displaySize.y * settings->firstPersonY - risePx);
 					fontPx = kBaseFontPx * rn.scale;
 				} else {
-					float x = 0.0f, y = 0.0f, z = -1.0f;
-					if (!camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) || z <= 0.0f) {
+					if (!rn.projected) {
 						continue;
 					}
-					screenPos = ImVec2(displaySize.x * x, displaySize.y * (1.0f - y));
+					screenPos = ImVec2(displaySize.x * rn.screenX, displaySize.y * (1.0f - rn.screenY));
 
 					// Perspective size: full size inside ~3.5 m, shrinking with
 					// distance.
@@ -413,6 +419,7 @@ namespace FDNG::Renderer
 					}
 
 					NumberManager::GetSingleton()->Update(g_resolved);
+					ProjectResolved();
 					if (g_resolved.empty()) {
 						g_vrClient.SubmitWorldQuads(nullptr, 0);  // clear stale billboards
 																  // Still run RenderHud so the panel clears its last pixels.
@@ -431,6 +438,7 @@ namespace FDNG::Renderer
 					}
 				} else {
 					NumberManager::GetSingleton()->Update(g_resolved);
+					ProjectResolved();
 
 					ImGui_ImplDX11_NewFrame();
 					ImGui_ImplWin32_NewFrame();
