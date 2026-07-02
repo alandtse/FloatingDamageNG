@@ -74,6 +74,13 @@ namespace FDNG
 		bool showAmplification{ true };
 		float amplificationThreshold{ 1.4f };
 
+		// [FirstPerson] — player-received numbers (damage and heals) in first
+		// person: pinned to a screen spot on flat, anchored ~1 m ahead at
+		// chest height in VR. Off = suppressed entirely in first person.
+		bool showFirstPersonNumbers{ true };
+		float firstPersonX{ 0.5f };   // flat pin, fraction of screen width
+		float firstPersonY{ 0.72f };  // flat pin, fraction of screen height
+
 		// [Font]
 		std::string fontPath;  // empty = auto (mod override, then Windows bold fonts)
 

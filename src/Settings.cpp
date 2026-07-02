@@ -83,6 +83,10 @@ namespace FDNG
 			fontPath = font;
 		}
 
+		showFirstPersonNumbers = ini.GetBoolValue("FirstPerson", "bShowFirstPersonNumbers", showFirstPersonNumbers);
+		firstPersonX = std::clamp(static_cast<float>(ini.GetDoubleValue("FirstPerson", "fPositionX", firstPersonX)), 0.0f, 1.0f);
+		firstPersonY = std::clamp(static_cast<float>(ini.GetDoubleValue("FirstPerson", "fPositionY", firstPersonY)), 0.0f, 1.0f);
+
 		showHitLocation = ini.GetBoolValue("Locational", "bShowHitLocation", showHitLocation);
 		showAmplification = ini.GetBoolValue("Locational", "bShowAmplification", showAmplification);
 		amplificationThreshold = static_cast<float>(ini.GetDoubleValue("Locational", "fAmplificationThreshold", amplificationThreshold));
@@ -144,6 +148,10 @@ namespace FDNG
 		ini.SetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling);
 
 		ini.SetValue("Font", "sFontPath", fontPath.c_str());
+
+		ini.SetBoolValue("FirstPerson", "bShowFirstPersonNumbers", showFirstPersonNumbers);
+		ini.SetDoubleValue("FirstPerson", "fPositionX", firstPersonX);
+		ini.SetDoubleValue("FirstPerson", "fPositionY", firstPersonY);
 
 		ini.SetBoolValue("Locational", "bShowHitLocation", showHitLocation);
 		ini.SetBoolValue("Locational", "bShowAmplification", showAmplification);

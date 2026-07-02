@@ -181,6 +181,12 @@ namespace FDNG
 		}
 		_lastUpdate = now;
 
+		// Freeze aging while the game is paused, or a potion drunk in the
+		// inventory expires its number behind the menu.
+		if (const auto ui = RE::UI::GetSingleton(); ui && ui->GameIsPaused()) {
+			dt = 0.0f;
+		}
+
 		{
 			std::scoped_lock lk{ _queueLock };
 			for (std::size_t i = 0; i < _queueCount; ++i) {

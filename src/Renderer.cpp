@@ -160,7 +160,21 @@ namespace FDNG::Renderer
 				ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoInputs);
 			auto* drawList = ImGui::GetWindowDrawList();
 
+			const auto settings = Settings::GetSingleton();
 			const bool firstPerson = PlayerInFirstPerson();
+
+			// First person: re-anchor player-received numbers ~1 m ahead at
+			// chest height (fresh heading each frame) instead of on the head,
+			// which would sit on the camera.
+			const auto player = RE::PlayerCharacter::GetSingleton();
+			RE::NiPoint3 firstPersonAnchor;
+			if (firstPerson && player) {
+				const float heading = player->GetAngleZ();
+				firstPersonAnchor = player->GetPosition();
+				firstPersonAnchor.x += std::sin(heading) * 70.0f;
+				firstPersonAnchor.y += std::cos(heading) * 70.0f;
+				firstPersonAnchor.z += 100.0f;
+			}
 
 			// Simple shelf packer across the panel.
 			float penX = kPanelMarginPx;
@@ -168,11 +182,12 @@ namespace FDNG::Renderer
 			float rowH = 0.0f;
 
 			for (const auto& rn : g_resolved) {
-				// Player-anchored numbers only read in third person (VR has a
-				// vanilla third-person toggle too); in first person they'd sit
-				// on the camera.
+				RE::NiPoint3 worldPos = rn.worldPos;
 				if (firstPerson && rn.number->origin == OriginTier::kPlayerVictim) {
-					continue;
+					if (!settings->showFirstPersonNumbers || !player) {
+						continue;
+					}
+					worldPos = firstPersonAnchor + (rn.worldPos - rn.number->anchor);  // keep the kinematic motion
 				}
 				// Full alpha in the panel; the fade is baked into the text color,
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
@@ -194,7 +209,7 @@ namespace FDNG::Renderer
 
 				const float heightMeters = blockSz.y * kWorldMetersPerPanelPixel;
 
-				RE::NiPoint3 quadPos = rn.worldPos;
+				RE::NiPoint3 quadPos = worldPos;
 				quadPos.z += 0.5f * heightMeters / kGameUnitToMeter;  // pos is the quad center
 
 				ImGuiVRHelperPluginAPI::WorldQuad quad{};
@@ -232,25 +247,36 @@ namespace FDNG::Renderer
 			const auto player = RE::PlayerCharacter::GetSingleton();
 			const auto playerPos = player ? player->GetPosition() : RE::NiPoint3{};
 
-			// Numbers anchored on the player only read in third person — in
-			// first person they'd hover on the camera.
+			const auto settings = Settings::GetSingleton();
 			const bool firstPerson = PlayerInFirstPerson();
 
 			for (const auto& rn : g_resolved) {
+				ImVec2 screenPos;
+				float fontPx;
 				if (firstPerson && rn.number->origin == OriginTier::kPlayerVictim) {
-					continue;
-				}
-				float x = 0.0f, y = 0.0f, z = -1.0f;
-				if (!camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) || z <= 0.0f) {
-					continue;
-				}
-				const ImVec2 screenPos{ displaySize.x * x, displaySize.y * (1.0f - y) };
+					// First person: player numbers pin to a configurable screen
+					// spot (they'd otherwise sit on the camera), keeping the
+					// vertical component of their motion.
+					if (!settings->showFirstPersonNumbers) {
+						continue;
+					}
+					const float risePx = (rn.worldPos.z - rn.number->anchor.z) * 0.75f;
+					screenPos = ImVec2(displaySize.x * settings->firstPersonX,
+						displaySize.y * settings->firstPersonY - risePx);
+					fontPx = kBaseFontPx * rn.scale;
+				} else {
+					float x = 0.0f, y = 0.0f, z = -1.0f;
+					if (!camera->WorldPtToScreenPt3(rn.worldPos, x, y, z, 1e-5f) || z <= 0.0f) {
+						continue;
+					}
+					screenPos = ImVec2(displaySize.x * x, displaySize.y * (1.0f - y));
 
-				// Perspective size: full size inside ~3.5 m, shrinking with
-				// distance, log-boosted so far hits stay readable.
-				const float distMeters = std::max(playerPos.GetDistance(rn.worldPos) * kGameUnitToMeter, 0.1f);
-				const float perspective = std::clamp(3.5f / distMeters, 0.25f, 1.25f);
-				const float fontPx = kBaseFontPx * rn.scale * perspective;
+					// Perspective size: full size inside ~3.5 m, shrinking with
+					// distance.
+					const float distMeters = std::max(playerPos.GetDistance(rn.worldPos) * kGameUnitToMeter, 0.1f);
+					const float perspective = std::clamp(3.5f / distMeters, 0.25f, 1.25f);
+					fontPx = kBaseFontPx * rn.scale * perspective;
+				}
 
 				const ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
 				DrawNumberBlock(drawList, rn, ImVec2(screenPos.x - sz.x * 0.5f, screenPos.y - sz.y), fontPx);

@@ -70,7 +70,8 @@ namespace FDNG::UI
 			ImGuiMCP::Checkbox("Player damage dealt", &s->showPlayerDamageDealt);
 			ImGuiMCP::Checkbox("Follower damage dealt", &s->showFollowerDamageDealt);
 			ImGuiMCP::Checkbox("NPC-on-NPC damage", &s->showNPCOnNPCDamage);
-			ImGuiMCP::Checkbox("Player damage taken (third person)", &s->showPlayerDamageTaken);
+			ImGuiMCP::Checkbox("Player damage taken", &s->showPlayerDamageTaken);
+			ImGuiMCP::Checkbox("Player numbers in first person (pinned)", &s->showFirstPersonNumbers);
 			ImGuiMCP::Checkbox("Healing", &s->showHealing);
 			ImGuiMCP::Checkbox("Magicka damage (hostile only)", &s->showMagickaDamage);
 			ImGuiMCP::Checkbox("Stamina damage (hostile only)", &s->showStaminaDamage);
