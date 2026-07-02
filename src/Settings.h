@@ -42,7 +42,6 @@ namespace FDNG
 
 		// [Behavior]
 		bool showMitigation{ true };
-		bool showResisted{ true };  // "RESISTED" tag when a hostile effect applies for zero
 		float minDamageToShow{ 1.0f };
 		float minHealToShow{ 5.0f };           // accumulation threshold; filters natural regen trickle
 		float dotAccumulationWindow{ 0.35f };  // merge same victim+type events younger than this

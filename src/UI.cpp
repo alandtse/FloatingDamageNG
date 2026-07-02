@@ -21,7 +21,9 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -51,6 +53,29 @@ namespace FDNG::UI
 		{
 			const auto ch = [](float v) { return static_cast<std::uint32_t>(std::clamp(v, 0.0f, 1.0f) * 255.0f + 0.5f); };
 			return (ch(a_in[0]) << 16) | (ch(a_in[1]) << 8) | ch(a_in[2]);
+		}
+
+		// devbench writes the port it bound to runtime.json on startup; we read
+		// it for display only (the integration itself is in-process). Cached —
+		// file I/O every frame would hitch while the panel is open.
+		int ReadDevBenchPort()
+		{
+			static int cached = -1;
+			static std::chrono::steady_clock::time_point lastRead;
+			const auto now = std::chrono::steady_clock::now();
+			if (cached >= 0 && now - lastRead < std::chrono::seconds(2)) {
+				return cached;
+			}
+			lastRead = now;
+			cached = 0;
+			std::ifstream in("Data/SKSE/Plugins/devbench/runtime.json");
+			std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+			if (const auto pos = text.find("\"port\""); pos != std::string::npos) {
+				if (const auto colon = text.find(':', pos); colon != std::string::npos) {
+					cached = std::atoi(text.c_str() + colon + 1);
+				}
+			}
+			return cached;
 		}
 
 		void ColorRow(const char* a_label, std::uint32_t& a_color)
@@ -94,7 +119,6 @@ namespace FDNG::UI
 
 			ImGuiMCP::SeparatorText("Behavior");
 			ImGuiMCP::Checkbox("Show mitigation subtext", &s->showMitigation);
-			ImGuiMCP::Checkbox("Show RESISTED on immune targets", &s->showResisted);
 			ImGuiMCP::SliderFloat("Min damage to show", &s->minDamageToShow, 0.0f, 25.0f, "%.1f", 0);
 			ImGuiMCP::SliderFloat("Min heal to show", &s->minHealToShow, 1.0f, 50.0f, "%.1f", 0);
 			ImGuiMCP::SliderFloat("Tick merge window (s)", &s->dotAccumulationWindow, 0.1f, 2.0f, "%.2f", 0);
@@ -119,6 +143,18 @@ namespace FDNG::UI
 			ImGuiMCP::Checkbox("Log follower performance", &s->logFollowerPerformance);
 			if (ImGuiMCP::Checkbox("devbench integration (exposes stats on its local port)", &s->enableDevBench) && s->enableDevBench) {
 				DevBench::Connect();
+			}
+			if (s->enableDevBench) {
+				if (DevBench::IsConnected()) {
+					if (const int port = ReadDevBenchPort(); port > 0) {
+						ImGuiMCP::Text("devbench host present (build %u), bound on 127.0.0.1:%d", DevBench::HostBuild(), port);
+					} else {
+						ImGuiMCP::Text("devbench host present (build %u); port pending in runtime.json", DevBench::HostBuild());
+					}
+					ImGuiMCP::TextDisabled("Tool: floatingdamage.stats (MCP + REST); event: floatingdamage.sessionEnded");
+				} else {
+					ImGuiMCP::TextDisabled("devbench host not detected — install the devbench SKSE plugin.");
+				}
 			}
 
 			ImGuiMCP::SeparatorText("Debug");

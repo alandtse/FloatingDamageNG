@@ -144,9 +144,19 @@ namespace FDNG
 		// when one is installed).
 		const auto settings = Settings::GetSingleton();
 		const auto sourceRef = a_hitData.sourceRef.get();
+		if (settings->debugLog) {
+			logger::debug("HitData: target={:08X} sourceRef={} type={} totalDmg={:.1f}",
+				target->GetFormID(), sourceRef ? sourceRef->GetFormID() : 0,
+				sourceRef ? static_cast<int>(sourceRef->GetFormType()) : -1, a_hitData.totalDamage);
+		}
 		if (const auto projectile = sourceRef ? sourceRef->As<RE::Projectile>() : nullptr) {
 			if (settings->showHitLocation) {
 				auto& impacts = projectile->GetProjectileRuntimeData().impacts;  // BSSimpleList lacks const iteration
+				if (settings->debugLog) {
+					const auto impact = impacts.empty() ? nullptr : *impacts.begin();
+					logger::debug("HitData: projectile impact node='{}'",
+						impact && impact->damageRootNode ? impact->damageRootNode->name.c_str() : "<none>");
+				}
 				if (!impacts.empty()) {
 					if (const auto node = (*impacts.begin())->damageRootNode; node && !node->name.empty()) {
 						for (const auto& tag : settings->locationTags) {
@@ -252,8 +262,8 @@ namespace FDNG
 		raw.av = a_actorValue != RE::ActorValue::kNone ? a_actorValue : a_effect->actorValue;
 		raw.victimID = a_target->GetFormID();
 		raw.amount = a_value;
-		if (raw.amount == 0.0f && raw.av != RE::ActorValue::kHealth) {
-			return;  // zero-appliers on non-health AVs (paralysis etc.) are just noise
+		if (raw.amount == 0.0f) {
+			return;  // zero applies carry no display information (see ProcessEffect)
 		}
 		// Safe on this thread: the effect is alive inside its own vfunc, the
 		// handle table resolve is thread-safe, and GetFormID is a plain read.
@@ -388,28 +398,10 @@ namespace FDNG
 				return;
 			}
 			if (a_raw.amount == 0.0f) {
-				// A hostile health effect that applies for zero = fully
-				// resisted/immune. Tag once per victim per window — immune
-				// targets zero every tick.
-				if (!settings->showResisted || !mgef || !(mgef->IsHostile() || mgef->IsDetrimental())) {
-					return;
-				}
-				{
-					const auto now = Clock::now();
-					std::scoped_lock lk{ _lock };
-					auto& stamp = _resistStamps[a_raw.victimID];
-					if (now - stamp < std::chrono::milliseconds(1200)) {
-						return;
-					}
-					stamp = now;
-				}
-				// Colored by the resisted element (fire-orange RESISTED on a
-				// flame atronach); all caps marks the 100% case.
-				auto kind = ClassifyMagicKind(mgef);
-				if (kind == DamageKind::kHealing) {
-					kind = DamageKind::kMagic;
-				}
-				EmitDamage(a_victim, caster, 0.0f, kind, HitFlags{}, 0.0f, 0.0f, "RESISTED");
+				// Zero-value applies are NOT a reliable full-resist signal —
+				// they occur for unrelated reasons and produced spurious
+				// RESISTED tags. Immune targets suppress the effect earlier
+				// in the pipeline instead; drop these.
 				return;
 			}
 			auto kind = ClassifyMagicKind(mgef);

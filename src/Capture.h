@@ -188,8 +188,7 @@ namespace FDNG
 		std::unordered_map<RE::FormID, PendingHit> _pendingHits;
 		std::unordered_map<RE::FormID, RecentMagic> _recentMagic;
 		std::unordered_map<RE::FormID, HealAccum> _healAccums;
-		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;         // key: victimID | kind<<32
-		std::unordered_map<RE::FormID, Clock::time_point> _resistStamps;  // RESISTED tag cooldown
+		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;  // key: victimID | kind<<32
 
 		// Audit state (bDeltaAudit only; main thread)
 		struct AuditEntry
