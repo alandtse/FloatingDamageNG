@@ -29,6 +29,12 @@ namespace FDNG::Renderer
 		constexpr float kPanelGapPx = 12.0f;  // enough to prevent quad UV bleed; smaller = more panel capacity
 		// World size of one panel pixel on a billboard (matches FloatingSubtitles' tuning).
 		constexpr float kWorldMetersPerPanelPixel = 0.0016875f;
+		// Quads are physically sized, so beyond the reference distance their
+		// angular size drops below HMD readability (an NPC number is ~5 cm —
+		// arc-minutes at a 20 m brawl). Grow them with distance, capped so a
+		// far skirmish reads as a hint rather than a billboard wall.
+		constexpr float kQuadRefDistanceMeters = 3.5f;
+		constexpr float kQuadMaxDistanceBoost = 8.0f;
 
 		ImU32 KindColor(const Number& a_n, float a_alpha)
 		{
@@ -268,7 +274,9 @@ namespace FDNG::Renderer
 				const ImVec2 blockSz = DrawNumberBlock(drawList, rn, ImVec2(penX, penY), fontPx);
 				rowH = std::max(rowH, blockSz.y);
 
-				const float heightMeters = blockSz.y * kWorldMetersPerPanelPixel;
+				const float distMeters = anchorPos.GetDistance(worldPos) * kGameUnitToMeter;
+				const float distanceBoost = std::clamp(distMeters / kQuadRefDistanceMeters, 1.0f, kQuadMaxDistanceBoost);
+				const float heightMeters = blockSz.y * kWorldMetersPerPanelPixel * distanceBoost;
 
 				RE::NiPoint3 quadPos = worldPos;
 				quadPos.z += 0.5f * heightMeters / kGameUnitToMeter;  // pos is the quad center
