@@ -205,8 +205,10 @@ namespace FDNG::Renderer
 			float penY = kPanelMarginPx;
 			float rowH = 0.0f;
 			std::size_t dropped = 0;
+			std::size_t index = 0;
 
 			for (const auto& rn : g_resolved) {
+				++index;
 				RE::NiPoint3 worldPos = rn.worldPos;
 				if (firstPerson && rn.number->origin == OriginTier::kPlayerVictim) {
 					if (!settings->showFirstPersonNumbers || !player) {
@@ -232,8 +234,10 @@ namespace FDNG::Renderer
 					rowH = 0.0f;
 				}
 				if (penY + fontPx * 2.0f > panelSize.y - kPanelMarginPx) {
-					++dropped;
-					continue;  // panel full; count the rest for the debug trace
+					// Panel full; the list is priority-sorted and rows only grow
+					// downward, so nothing later fits either.
+					dropped = g_resolved.size() - (index - 1);
+					break;
 				}
 
 				const ImVec2 blockSz = DrawNumberBlock(drawList, rn, ImVec2(penX, penY), fontPx);
