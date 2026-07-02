@@ -16,6 +16,22 @@ namespace FDNG::DevBench
 
 		nlohmann::json SummaryToJson(const CombatLog::SessionSummary& a_s)
 		{
+			auto combatants = nlohmann::json::array();
+			for (const auto& c : a_s.combatants) {
+				combatants.push_back({
+					{ "name", c.name },
+					{ "follower", c.isFollower },
+					{ "hostile", c.isHostileToPlayer },
+					{ "died", c.died },
+					{ "fled", c.fled },
+					{ "damageDealt", c.damageDealt },
+					{ "damageTaken", c.damageTaken },
+					{ "healingReceived", c.healingReceived },
+					{ "hits", c.hitsDealt },
+					{ "crits", c.critsDealt },
+					{ "timeToDie", c.timeToDie },
+				});
+			}
 			return {
 				{ "index", a_s.index },
 				{ "startedAt", a_s.startedAt },
@@ -24,8 +40,9 @@ namespace FDNG::DevBench
 				{ "playerDamage", a_s.playerDamage },
 				{ "realDPS", a_s.realDPS },
 				{ "activeDPS", a_s.activeDPS },
+				{ "peakDPS", a_s.peakDPS },
 				{ "dpsSamples", a_s.dpsSamples },
-				{ "combatants", a_s.combatantLines },
+				{ "combatants", std::move(combatants) },
 			};
 		}
 

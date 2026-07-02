@@ -87,79 +87,110 @@ namespace FDNG::UI
 			}
 		}
 
+		// One-line explanation on hover for controls whose label can't carry it.
+		void Tip(const char* a_text)
+		{
+			if (ImGuiMCP::IsItemHovered(0)) {
+				ImGuiMCP::SetTooltip("%s", a_text);
+			}
+		}
+
 		void __stdcall RenderSettings()
 		{
 			auto* s = Settings::GetSingleton();
 
-			ImGuiMCP::SeparatorText("Filters");
-			ImGuiMCP::Checkbox("Player damage dealt", &s->showPlayerDamageDealt);
-			ImGuiMCP::Checkbox("Follower damage dealt", &s->showFollowerDamageDealt);
-			ImGuiMCP::Checkbox("NPC-on-NPC damage", &s->showNPCOnNPCDamage);
-			ImGuiMCP::Checkbox("Player damage taken", &s->showPlayerDamageTaken);
-			ImGuiMCP::Checkbox("Player numbers in first person (pinned)", &s->showFirstPersonNumbers);
-			ImGuiMCP::Checkbox("Healing", &s->showHealing);
-			ImGuiMCP::Checkbox("Magicka damage (hostile only)", &s->showMagickaDamage);
-			ImGuiMCP::Checkbox("Stamina damage (hostile only)", &s->showStaminaDamage);
-			ImGuiMCP::SliderFloat("NPC visibility radius (m)", &s->maxVisibilityRadiusMeters, 5.0f, 100.0f, "%.0f", 0);
-			ImGuiMCP::SliderInt("Max concurrent numbers", &s->maxConcurrentQuads, 5, 128, "%d", 0);
-
-			ImGuiMCP::SeparatorText("Sizing");
-			ImGuiMCP::SliderFloat("Base font scale", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
-			ImGuiMCP::SliderFloat("Damage-magnitude modifier", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
-			ImGuiMCP::SliderFloat("Scale ceiling", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
-
-			ImGuiMCP::SeparatorText("Motion");
-			int profile = static_cast<int>(s->profile);
-			const char* profiles[] = { "Float", "Arc (parabola)", "Radial burst" };
-			if (ImGuiMCP::Combo("Kinematic profile", &profile, profiles, 3, -1)) {
-				s->profile = static_cast<KinematicProfile>(profile);
+			if (ImGuiMCP::CollapsingHeader("What to show", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				ImGuiMCP::Checkbox("Your damage", &s->showPlayerDamageDealt);
+				ImGuiMCP::Checkbox("Follower damage", &s->showFollowerDamageDealt);
+				ImGuiMCP::Checkbox("NPC-vs-NPC damage", &s->showNPCOnNPCDamage);
+				Tip("Fights you aren't part of. Rendered smaller and dimmer, and hidden beyond the visibility radius.");
+				ImGuiMCP::Checkbox("Damage you take", &s->showPlayerDamageTaken);
+				ImGuiMCP::Checkbox("Player numbers in first person", &s->showFirstPersonNumbers);
+				Tip("Pinned to a screen spot on flat, anchored ahead of you in VR. Off = hidden while in first person.");
+				ImGuiMCP::Checkbox("Healing", &s->showHealing);
+				ImGuiMCP::Checkbox("Magicka damage", &s->showMagickaDamage);
+				Tip("Hostile drains only (shock spells, absorb effects). Your own casting costs never show.");
+				ImGuiMCP::Checkbox("Stamina damage", &s->showStaminaDamage);
+				Tip("Hostile drains only (frost spells, absorb effects). Sprinting and power attacks never show.");
+				ImGuiMCP::Checkbox("Mitigation subtext", &s->showMitigation);
+				Tip("The small \"(-45 armor)\" / \"(-20 resisted)\" line under a number.");
+				ImGuiMCP::Checkbox("Hit location tags", &s->showHitLocation);
+				Tip("HEADSHOT etc. on bow/crossbow hits, from where the arrow actually struck.");
+				ImGuiMCP::SliderFloat("NPC visibility radius (m)", &s->maxVisibilityRadiusMeters, 5.0f, 100.0f, "%.0f", 0);
+				ImGuiMCP::SliderInt("Max numbers on screen", &s->maxConcurrentQuads, 5, 128, "%d", 0);
 			}
-			ImGuiMCP::SliderFloat("Speed multiplier", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
-			ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
 
-			ImGuiMCP::SeparatorText("Behavior");
-			ImGuiMCP::Checkbox("Show mitigation subtext", &s->showMitigation);
-			ImGuiMCP::SliderFloat("Min damage to show", &s->minDamageToShow, 0.0f, 25.0f, "%.1f", 0);
-			ImGuiMCP::SliderFloat("Min heal to show", &s->minHealToShow, 1.0f, 50.0f, "%.1f", 0);
-			ImGuiMCP::SliderFloat("Tick merge window (s)", &s->dotAccumulationWindow, 0.1f, 2.0f, "%.2f", 0);
-
-			ImGuiMCP::SeparatorText("Colors");
-			ColorRow("Physical", s->colorPhysical);
-			ColorRow("Critical", s->colorCritical);
-			ColorRow("Blocked", s->colorBlocked);
-			ColorRow("Fire", s->colorFire);
-			ColorRow("Frost", s->colorFrost);
-			ColorRow("Shock", s->colorShock);
-			ColorRow("Poison", s->colorPoison);
-			ColorRow("Magic (untyped)", s->colorMagic);
-			ColorRow("Healing", s->colorHealing);
-			ColorRow("Magicka damage", s->colorMagickaDamage);
-			ColorRow("Stamina damage", s->colorStaminaDamage);
-
-			ImGuiMCP::SeparatorText("Analytics");
-			ImGuiMCP::Checkbox("Combat log", &s->enableCombatLog);
-			ImGuiMCP::Checkbox("Write sessions to disk", &s->writeLogToDisk);
-			ImGuiMCP::Checkbox("Live DPS window (flat)", &s->enableLiveDPSWindow);
-			ImGuiMCP::Checkbox("Log follower performance", &s->logFollowerPerformance);
-			if (ImGuiMCP::Checkbox("devbench integration (exposes stats on its local port)", &s->enableDevBench) && s->enableDevBench) {
-				DevBench::Connect();
-			}
-			if (s->enableDevBench) {
-				if (DevBench::IsConnected()) {
-					if (const int port = ReadDevBenchPort(); port > 0) {
-						ImGuiMCP::Text("devbench host present (build %u), bound on 127.0.0.1:%d", DevBench::HostBuild(), port);
-					} else {
-						ImGuiMCP::Text("devbench host present (build %u); port pending in runtime.json", DevBench::HostBuild());
-					}
-					ImGuiMCP::TextDisabled("Tool: floatingdamage.stats (MCP + REST); event: floatingdamage.sessionEnded");
-				} else {
-					ImGuiMCP::TextDisabled("devbench host not detected — install the devbench SKSE plugin.");
+			if (ImGuiMCP::CollapsingHeader("Size and motion", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				ImGuiMCP::SliderFloat("Base size", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Big hits grow by", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
+				Tip("How much larger high-damage numbers render (logarithmic in the damage). 0 = all numbers equal size.");
+				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
+				int profile = static_cast<int>(s->profile);
+				const char* profiles[] = { "Float (straight rise)", "Arc (tossed sideways)", "Radial burst" };
+				if (ImGuiMCP::Combo("Motion", &profile, profiles, 3, -1)) {
+					s->profile = static_cast<KinematicProfile>(profile);
 				}
+				ImGuiMCP::SliderFloat("Speed", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
 			}
 
-			ImGuiMCP::SeparatorText("Debug");
-			ImGuiMCP::Checkbox("Debug log", &s->debugLog);
-			ImGuiMCP::Checkbox("Delta audit (missed-damage detector)", &s->deltaAudit);
+			if (ImGuiMCP::CollapsingHeader("Thresholds", 0)) {
+				ImGuiMCP::SliderFloat("Min damage to show", &s->minDamageToShow, 0.0f, 25.0f, "%.1f", 0);
+				Tip("Smaller ticks pool up until they cross this, then show as one number.");
+				ImGuiMCP::SliderFloat("Min heal to show", &s->minHealToShow, 1.0f, 50.0f, "%.1f", 0);
+				Tip("Filters natural health regen; real heals accumulate past it quickly.");
+				ImGuiMCP::SliderFloat("Merge window (s)", &s->dotAccumulationWindow, 0.1f, 2.0f, "%.2f", 0);
+				Tip("Repeat hits of the same type on one target within this window add into the existing number.");
+			}
+
+			if (ImGuiMCP::CollapsingHeader("Colors", 0)) {
+				ColorRow("Physical", s->colorPhysical);
+				ColorRow("Critical", s->colorCritical);
+				ColorRow("Blocked", s->colorBlocked);
+				ColorRow("Fire", s->colorFire);
+				ColorRow("Frost", s->colorFrost);
+				ColorRow("Shock", s->colorShock);
+				ColorRow("Poison", s->colorPoison);
+				ColorRow("Magic (untyped)", s->colorMagic);
+				ColorRow("Healing", s->colorHealing);
+				ColorRow("Magicka damage", s->colorMagickaDamage);
+				ColorRow("Stamina damage", s->colorStaminaDamage);
+			}
+
+			if (ImGuiMCP::CollapsingHeader("Analytics", 0)) {
+				ImGuiMCP::Checkbox("Combat log", &s->enableCombatLog);
+				Tip("Track each fight: per-combatant damage, healing, crits, time-to-die, DPS. Feeds the Combat Stats page.");
+				ImGuiMCP::BeginDisabled(!s->enableCombatLog);
+				ImGuiMCP::Checkbox("Write sessions to disk", &s->writeLogToDisk);
+				Tip("Appends session reports to FloatingDamageNG-combat.log next to your SKSE logs (rotated at 5 MB).");
+				ImGuiMCP::Checkbox("Live DPS readout", &s->enableLiveDPSWindow);
+				Tip("Small top-right overlay during combat. Flat screen only.");
+				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);
+				if (ImGuiMCP::Checkbox("devbench integration", &s->enableDevBench) && s->enableDevBench) {
+					DevBench::Connect();
+				}
+				Tip("Registers a floatingdamage.stats tool with the devbench dev harness, exposing stats on its local port. For tooling; leave off otherwise.");
+				if (s->enableDevBench) {
+					if (DevBench::IsConnected()) {
+						if (const int port = ReadDevBenchPort(); port > 0) {
+							ImGuiMCP::Text("devbench host present (build %u), bound on 127.0.0.1:%d", DevBench::HostBuild(), port);
+						} else {
+							ImGuiMCP::Text("devbench host present (build %u); port pending in runtime.json", DevBench::HostBuild());
+						}
+						ImGuiMCP::TextDisabled("Tool: floatingdamage.stats (MCP + REST); event: floatingdamage.sessionEnded");
+					} else {
+						ImGuiMCP::TextDisabled("devbench host not detected — install the devbench SKSE plugin.");
+					}
+				}
+				ImGuiMCP::EndDisabled();
+			}
+
+			if (ImGuiMCP::CollapsingHeader("Advanced", 0)) {
+				ImGuiMCP::Checkbox("Debug log", &s->debugLog);
+				Tip("Writes per-event capture traces to FloatingDamageNG.log. For bug reports.");
+				ImGuiMCP::Checkbox("Delta audit", &s->deltaAudit);
+				Tip("Once a second, compares each fighter's observed health change against captured events and warns in the log about damage the mod missed.");
+			}
 
 			ImGuiMCP::Separator();
 			if (ImGuiMCP::Button("Save to INI", { 0, 0 })) {
@@ -169,7 +200,58 @@ namespace FDNG::UI
 			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
 				s->Load();
 			}
-			ImGuiMCP::TextDisabled("Changes apply immediately; font changes need a restart.");
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
+				s->ResetToDefaults();
+			}
+			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
+		}
+
+		void DrawCombatantTable(const CombatLog::SessionSummary& a_session)
+		{
+			constexpr auto flags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
+			const auto id = std::format("##fdng_tbl{}", a_session.index);
+			if (!ImGuiMCP::BeginTable(id.c_str(), 7, flags, { 0, 0 }, 0.0f)) {
+				return;
+			}
+			ImGuiMCP::TableSetupColumn("Combatant", 0, 0.30f, 0);
+			ImGuiMCP::TableSetupColumn("Dealt", 0, 0.12f, 0);
+			ImGuiMCP::TableSetupColumn("DPS", 0, 0.10f, 0);
+			ImGuiMCP::TableSetupColumn("Crit%", 0, 0.10f, 0);
+			ImGuiMCP::TableSetupColumn("Taken", 0, 0.12f, 0);
+			ImGuiMCP::TableSetupColumn("Healed", 0, 0.12f, 0);
+			ImGuiMCP::TableSetupColumn("Fate", 0, 0.14f, 0);
+			ImGuiMCP::TableHeadersRow();
+
+			const float duration = std::max(a_session.duration, 0.01f);
+			for (const auto& c : a_session.combatants) {  // pre-sorted by damage dealt
+				ImGuiMCP::TableNextRow(0, 0.0f);
+				ImGuiMCP::TableSetColumnIndex(0);
+				ImGuiMCP::Text("%s%s", c.name.c_str(), c.isFollower ? " (follower)" : (c.isHostileToPlayer ? "" : " (neutral)"));
+				ImGuiMCP::TableSetColumnIndex(1);
+				ImGuiMCP::Text("%.0f", c.damageDealt);
+				ImGuiMCP::TableSetColumnIndex(2);
+				ImGuiMCP::Text("%.1f", c.damageDealt / duration);
+				ImGuiMCP::TableSetColumnIndex(3);
+				ImGuiMCP::Text("%d", c.hitsDealt > 0 ? (100 * c.critsDealt / c.hitsDealt) : 0);
+				ImGuiMCP::TableSetColumnIndex(4);
+				ImGuiMCP::Text("%.0f", c.damageTaken);
+				ImGuiMCP::TableSetColumnIndex(5);
+				if (c.healingReceived > 0.0f) {
+					ImGuiMCP::Text("+%.0f", c.healingReceived);
+				}
+				ImGuiMCP::TableSetColumnIndex(6);
+				if (c.died) {
+					if (c.timeToDie >= 0.0f) {
+						ImGuiMCP::Text("died (%.1fs)", c.timeToDie);
+					} else {
+						ImGuiMCP::Text("died");
+					}
+				} else if (c.fled) {
+					ImGuiMCP::TextDisabled("fled");
+				}
+			}
+			ImGuiMCP::EndTable();
 		}
 
 		void __stdcall RenderStats()
@@ -178,6 +260,8 @@ namespace FDNG::UI
 			if (live.active) {
 				ImGuiMCP::Text("In combat: %.1fs | %.0f dmg | DPS %.1f real / %.1f active",
 					live.sessionSeconds, live.playerDamage, live.realDPS, live.activeDPS);
+			} else if (!Settings::GetSingleton()->enableCombatLog) {
+				ImGuiMCP::TextDisabled("Combat log is disabled — enable it in Settings > Analytics.");
 			} else {
 				ImGuiMCP::TextDisabled("Not in combat.");
 			}
@@ -196,14 +280,13 @@ namespace FDNG::UI
 				if (!ImGuiMCP::CollapsingHeader(header.c_str(), 0)) {
 					continue;
 				}
-				ImGuiMCP::Text("DPS %.1f real / %.1f active", s.realDPS, s.activeDPS);
+				ImGuiMCP::Text("Player DPS %.1f real / %.1f active", s.realDPS, s.activeDPS);
 				if (!s.dpsSamples.empty()) {
+					const auto overlay = std::format("player dps, peak {:.0f}", s.peakDPS);
 					ImGuiMCP::PlotLines("##dps", s.dpsSamples.data(), static_cast<int>(s.dpsSamples.size()),
-						0, "player damage / second", 0.0f, FLT_MAX, { -1.0f, 80.0f }, sizeof(float));
+						0, overlay.c_str(), 0.0f, FLT_MAX, { -1.0f, 80.0f }, sizeof(float));
 				}
-				for (const auto& line : s.combatantLines) {
-					ImGuiMCP::BulletText("%s", line.c_str());
-				}
+				DrawCombatantTable(s);
 			}
 		}
 	}

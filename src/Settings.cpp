@@ -131,6 +131,16 @@ namespace FDNG
 			std::to_underlying(profile), quadLifetimeSeconds, maxConcurrentQuads);
 	}
 
+	void Settings::ResetToDefaults()
+	{
+		*this = Settings{};
+		locationTags.push_back({ std::regex{ ".*head.*", std::regex::icase }, "HEADSHOT" });
+		if (const auto log = spdlog::default_logger()) {
+			log->set_level(spdlog::level::info);
+			log->flush_on(spdlog::level::info);
+		}
+	}
+
 	void Settings::Save() const
 	{
 		CSimpleIniA ini;

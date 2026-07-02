@@ -261,6 +261,9 @@ namespace FDNG
 		summary.realDPS = realDPS;
 		summary.activeDPS = activeDPS;
 		summary.dpsSamples = _dpsSamples;
+		for (const float sample : _dpsSamples) {
+			summary.peakDPS = std::max(summary.peakDPS, sample);
+		}
 
 		const auto playerID = RE::PlayerCharacter::GetSingleton() ? RE::PlayerCharacter::GetSingleton()->GetFormID() : 0;
 		for (const auto& [id, c] : _combatants) {
@@ -270,23 +273,24 @@ namespace FDNG
 			if (c.isFollower && !settings->logFollowerPerformance) {
 				continue;
 			}
-			std::string fate;
-			if (c.diedAt >= 0.0f) {
-				fate = c.firstHitTakenAt >= 0.0f ?
-				           std::format("died at {:.1f}s (TTD {:.1f}s)", c.diedAt, c.diedAt - c.firstHitTakenAt) :
-				           std::format("died at {:.1f}s", c.diedAt);
-			} else if (c.isHostileToPlayer && c.damageTaken > 0.0f) {
-				fate = "survived/fled";  // spec §5: threat cleared with health > 0
+			CombatantSummary cs;
+			cs.name = c.name;
+			cs.isFollower = c.isFollower;
+			cs.isHostileToPlayer = c.isHostileToPlayer;
+			cs.died = c.diedAt >= 0.0f;
+			cs.fled = !cs.died && c.isHostileToPlayer && c.damageTaken > 0.0f;  // spec §5: threat cleared with health > 0
+			cs.damageDealt = c.damageDealt;
+			cs.damageTaken = c.damageTaken;
+			cs.healingReceived = c.healingReceived;
+			cs.hitsDealt = c.hitsDealt;
+			cs.critsDealt = c.critsDealt;
+			if (cs.died && c.firstHitTakenAt >= 0.0f) {
+				cs.timeToDie = c.diedAt - c.firstHitTakenAt;
 			}
-			summary.combatantLines.push_back(std::format("{}{} [{:08X}] — dealt {:.0f} ({} hits, {} crit{}), taken {:.0f}{}{}",
-				c.name,
-				c.isFollower ? " (follower)" : (c.isHostileToPlayer ? " (hostile)" : ""),
-				id,
-				c.damageDealt, c.hitsDealt, c.critsDealt, c.critsDealt == 1 ? "" : "s",
-				c.damageTaken,
-				c.healingReceived > 0.0f ? std::format(", healed +{:.0f}", c.healingReceived) : "",
-				fate.empty() ? "" : std::format(" — {}", fate)));
+			summary.combatants.push_back(std::move(cs));
 		}
+		std::sort(summary.combatants.begin(), summary.combatants.end(),
+			[](const auto& a, const auto& b) { return a.damageDealt > b.damageDealt; });
 
 		if (settings->writeLogToDisk) {
 			// Rotate once past the cap so a long-running install never grows
@@ -304,10 +308,22 @@ namespace FDNG
 			std::ofstream out(path, std::ios::app);
 			if (out) {
 				out << std::format("=== Session #{} — {} @ {} — {:.1f}s ===\n", summary.index, summary.startedAt, summary.location, summary.duration);
-				out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active)\n",
-					summary.playerDamage, summary.realDPS, summary.activeDPS, _playerActiveSeconds);
-				for (const auto& line : summary.combatantLines) {
-					out << "  " << line << '\n';
+				out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active, peak {:.0f})\n",
+					summary.playerDamage, summary.realDPS, summary.activeDPS, _playerActiveSeconds, summary.peakDPS);
+				for (const auto& c : summary.combatants) {
+					std::string fate;
+					if (c.died) {
+						fate = c.timeToDie >= 0.0f ? std::format(" — died (TTD {:.1f}s)", c.timeToDie) : " — died";
+					} else if (c.fled) {
+						fate = " — survived/fled";
+					}
+					out << std::format("  {}{} — dealt {:.0f} ({} hits, {} crit{}), taken {:.0f}{}{}\n",
+						c.name,
+						c.isFollower ? " (follower)" : (c.isHostileToPlayer ? " (hostile)" : ""),
+						c.damageDealt, c.hitsDealt, c.critsDealt, c.critsDealt == 1 ? "" : "s",
+						c.damageTaken,
+						c.healingReceived > 0.0f ? std::format(", healed +{:.0f}", c.healingReceived) : "",
+						fate);
 				}
 				out << '\n';
 			} else {

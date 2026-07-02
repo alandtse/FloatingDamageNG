@@ -17,7 +17,8 @@ namespace FDNG
 		static Settings* GetSingleton();
 
 		void Load();
-		void Save() const;  // write current values back to the INI (used by the SMF config UI)
+		void Save() const;       // write current values back to the INI (used by the SMF config UI)
+		void ResetToDefaults();  // in-memory only; Save() to persist
 
 		// [CoreFilters]
 		bool showPlayerDamageDealt{ true };

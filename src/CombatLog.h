@@ -35,6 +35,23 @@ namespace FDNG
 			float activeDPS{ 0.0f };
 		};
 
+		// Structured per-combatant result — the stats table renders these
+		// directly (never pre-format to strings; the UI can't sort strings).
+		struct CombatantSummary
+		{
+			std::string name;
+			bool isFollower{ false };
+			bool isHostileToPlayer{ false };
+			bool died{ false };
+			bool fled{ false };
+			float damageDealt{ 0.0f };
+			float damageTaken{ 0.0f };
+			float healingReceived{ 0.0f };
+			int hitsDealt{ 0 };
+			int critsDealt{ 0 };
+			float timeToDie{ -1.0f };  // first hit taken -> death; -1 when n/a
+		};
+
 		// Finished-session record kept for in-game browsing (SMF stats page).
 		struct SessionSummary
 		{
@@ -45,8 +62,9 @@ namespace FDNG
 			float playerDamage{ 0.0f };
 			float realDPS{ 0.0f };
 			float activeDPS{ 0.0f };
-			std::vector<float> dpsSamples;  // player damage per second, 1 Hz
-			std::vector<std::string> combatantLines;
+			float peakDPS{ 0.0f };                     // max 1 Hz sample
+			std::vector<float> dpsSamples;             // player damage per second, 1 Hz
+			std::vector<CombatantSummary> combatants;  // sorted by damage dealt, desc
 		};
 
 		static CombatLog* GetSingleton();
