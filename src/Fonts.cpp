@@ -102,14 +102,16 @@ namespace FDNG::Fonts
 				if (!std::filesystem::is_directory(a_dir, ec)) {
 					return;
 				}
-				for (const auto& e : std::filesystem::directory_iterator(a_dir, ec)) {
-					if (ec || !e.is_regular_file()) {
+				// increment(ec), not a ranged-for: the range loop's operator++
+				// throws on a mid-scan filesystem error, crashing the game.
+				for (auto it = std::filesystem::directory_iterator(a_dir, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+					if (!it->is_regular_file()) {
 						continue;
 					}
-					auto ext = e.path().extension().string();
+					auto ext = it->path().extension().string();
 					std::ranges::transform(ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(c)); });
 					if (ext == ".ttf" || ext == ".otf") {
-						g_available.emplace_back(e.path().stem().string(), e.path().string());
+						g_available.emplace_back(it->path().stem().string(), it->path().string());
 					}
 				}
 			};

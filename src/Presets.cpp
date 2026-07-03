@@ -73,11 +73,13 @@ namespace FDNG::Presets
 				return;
 			}
 			std::vector<Effect> user;
-			for (const auto& entry : std::filesystem::directory_iterator(kPresetDir, ec)) {
-				if (ec || !entry.is_regular_file() || entry.path().extension() != ".json") {
+			// increment(ec) rather than a ranged-for: the range loop's operator++
+			// throws on a mid-scan filesystem error, which would crash the game.
+			for (auto it = std::filesystem::directory_iterator(kPresetDir, ec); !ec && it != std::filesystem::directory_iterator(); it.increment(ec)) {
+				if (!it->is_regular_file() || it->path().extension() != ".json") {
 					continue;
 				}
-				if (auto e = ParseFile(entry.path())) {
+				if (auto e = ParseFile(it->path())) {
 					user.push_back(std::move(*e));
 				}
 			}
@@ -141,6 +143,11 @@ namespace FDNG::Presets
 			return false;
 		}
 		out << json.dump(2) << '\n';
+		out.flush();
+		if (!out.good()) {
+			logger::warn("Preset '{}' failed to write (disk full?).", file);
+			return false;
+		}
 		Reload();
 		return true;
 	}
