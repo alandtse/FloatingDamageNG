@@ -276,24 +276,76 @@ namespace FDNG::UI
 			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
 		}
 
-		void DrawCombatantTable(const CombatLog::SessionSummary& a_session)
+		bool NameMatchesFilter(const std::string& a_name, const char* a_filter)
 		{
-			constexpr auto flags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
+			if (!a_filter || !a_filter[0]) {
+				return true;
+			}
+			const auto icontains = [](const std::string& hay, const char* needle) {
+				const auto it = std::search(hay.begin(), hay.end(), needle, needle + std::strlen(needle),
+					[](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
+				return it != hay.end();
+			};
+			return icontains(a_name, a_filter);
+		}
+
+		void DrawCombatantTable(const CombatLog::SessionSummary& a_session, const char* a_filter)
+		{
+			constexpr auto flags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH |
+			                       ImGuiMCP::ImGuiTableFlags_SizingStretchProp | ImGuiMCP::ImGuiTableFlags_Sortable;
 			const auto id = std::format("##fdng_tbl{}", a_session.index);
 			if (!ImGuiMCP::BeginTable(id.c_str(), 7, flags, { 0, 0 }, 0.0f)) {
 				return;
 			}
 			ImGuiMCP::TableSetupColumn("Combatant", 0, 0.30f, 0);
-			ImGuiMCP::TableSetupColumn("Dealt", 0, 0.12f, 0);
-			ImGuiMCP::TableSetupColumn("DPS", 0, 0.10f, 0);
-			ImGuiMCP::TableSetupColumn("Crit%", 0, 0.10f, 0);
-			ImGuiMCP::TableSetupColumn("Taken", 0, 0.12f, 0);
-			ImGuiMCP::TableSetupColumn("Healed", 0, 0.12f, 0);
-			ImGuiMCP::TableSetupColumn("Fate", 0, 0.14f, 0);
+			ImGuiMCP::TableSetupColumn("Dealt", ImGuiMCP::ImGuiTableColumnFlags_DefaultSort | ImGuiMCP::ImGuiTableColumnFlags_PreferSortDescending, 0.12f, 1);
+			ImGuiMCP::TableSetupColumn("DPS", ImGuiMCP::ImGuiTableColumnFlags_PreferSortDescending, 0.10f, 2);
+			ImGuiMCP::TableSetupColumn("Crit%", ImGuiMCP::ImGuiTableColumnFlags_PreferSortDescending, 0.10f, 3);
+			ImGuiMCP::TableSetupColumn("Taken", ImGuiMCP::ImGuiTableColumnFlags_PreferSortDescending, 0.12f, 4);
+			ImGuiMCP::TableSetupColumn("Healed", ImGuiMCP::ImGuiTableColumnFlags_PreferSortDescending, 0.12f, 5);
+			ImGuiMCP::TableSetupColumn("Fate", ImGuiMCP::ImGuiTableColumnFlags_NoSort, 0.14f, 6);
 			ImGuiMCP::TableHeadersRow();
 
 			const float duration = std::max(a_session.duration, 0.01f);
-			for (const auto& c : a_session.combatants) {  // pre-sorted by damage dealt
+
+			// Click-to-sort (open-shaders' TableGetSortSpecs pattern): sort a
+			// pointer view, the summary stays immutable.
+			std::vector<const CombatLog::CombatantSummary*> rows;
+			rows.reserve(a_session.combatants.size());
+			for (const auto& c : a_session.combatants) {
+				if (NameMatchesFilter(c.name, a_filter)) {
+					rows.push_back(&c);
+				}
+			}
+			if (const auto* specs = ImGuiMCP::TableGetSortSpecs(); specs && specs->SpecsCount > 0) {
+				const auto& spec = specs->Specs[0];
+				const bool asc = spec.SortDirection == ImGuiMCP::ImGuiSortDirection_Ascending;
+				std::sort(rows.begin(), rows.end(), [&](const auto* a, const auto* b) {
+					const auto key = [&](const CombatLog::CombatantSummary& c) -> float {
+						switch (spec.ColumnUserID) {
+						case 1:
+							return c.damageDealt;
+						case 2:
+							return c.damageDealt / duration;
+						case 3:
+							return c.hitsDealt > 0 ? static_cast<float>(c.critsDealt) / c.hitsDealt : 0.0f;
+						case 4:
+							return c.damageTaken;
+						case 5:
+							return c.healingReceived;
+						default:
+							return 0.0f;
+						}
+					};
+					if (spec.ColumnUserID == 0) {
+						return asc ? a->name < b->name : b->name < a->name;
+					}
+					return asc ? key(*a) < key(*b) : key(*b) < key(*a);
+				});
+			}
+
+			for (const auto* row : rows) {
+				const auto& c = *row;
 				ImGuiMCP::TableNextRow(0, 0.0f);
 				ImGuiMCP::TableSetColumnIndex(0);
 				ImGuiMCP::Text("%s%s", c.name.c_str(), c.isFollower ? " (follower)" : (c.isHostileToPlayer ? "" : " (neutral)"));
@@ -323,48 +375,46 @@ namespace FDNG::UI
 			ImGuiMCP::EndTable();
 		}
 
-		// A small breakdown table (drill-down rows are pre-sorted by damage).
-		void DrawBreakdownTable(const char* a_id, const char* a_valueHeader,
-			const std::vector<CombatLog::BreakdownRow>& a_rows, bool a_showMitigated)
+		// Details!-style meter list: each row is a kind-colored share bar
+		// with the label on it — proportion and damage type read at a glance,
+		// no charting library needed.
+		void DrawMeterBars(const std::vector<CombatLog::BreakdownRow>& a_rows, bool a_kindColored, bool a_showMitigated)
 		{
 			if (a_rows.empty()) {
 				ImGuiMCP::TextDisabled("none");
 				return;
 			}
-			constexpr auto flags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
-			if (!ImGuiMCP::BeginTable(a_id, a_showMitigated ? 5 : 4, flags, { 0, 0 }, 0.0f)) {
-				return;
-			}
+			const auto settings = Settings::GetSingleton();
 			float grand = 0.0f;
 			for (const auto& r : a_rows) {
 				grand += r.total;
 			}
-			ImGuiMCP::TableSetupColumn(a_valueHeader, 0, 0.40f, 0);
-			ImGuiMCP::TableSetupColumn("Damage", 0, 0.16f, 0);
-			ImGuiMCP::TableSetupColumn("%", 0, 0.12f, 0);
-			ImGuiMCP::TableSetupColumn("Hits (crit)", 0, 0.16f, 0);
-			if (a_showMitigated) {
-				ImGuiMCP::TableSetupColumn("Resisted", 0, 0.16f, 0);
-			}
-			ImGuiMCP::TableHeadersRow();
+			auto* dl = ImGuiMCP::GetWindowDrawList();
+			const float fontH = ImGuiMCP::GetFontSize();
+			const float rowH = fontH + 6.0f;
+			const float width = 540.0f;
+
 			for (const auto& r : a_rows) {
-				ImGuiMCP::TableNextRow(0, 0.0f);
-				ImGuiMCP::TableSetColumnIndex(0);
-				ImGuiMCP::Text("%s", r.name.c_str());
-				ImGuiMCP::TableSetColumnIndex(1);
-				ImGuiMCP::Text("%.0f", r.total);
-				ImGuiMCP::TableSetColumnIndex(2);
-				ImGuiMCP::Text("%.0f%%", grand > 0.0f ? 100.0f * r.total / grand : 0.0f);
-				ImGuiMCP::TableSetColumnIndex(3);
-				ImGuiMCP::Text("%d (%d)", r.hits, r.crits);
-				if (a_showMitigated) {
-					ImGuiMCP::TableSetColumnIndex(4);
-					if (r.total + r.mitigated > 0.0f && r.mitigated > 0.0f) {
-						ImGuiMCP::Text("%.0f%%", 100.0f * r.mitigated / (r.total + r.mitigated));
-					}
+				ImGuiMCP::ImVec2 base;
+				ImGuiMCP::GetCursorScreenPos(&base);
+				const float frac = grand > 0.0f ? r.total / grand : 0.0f;
+				const auto rgb = a_kindColored ? KindRgb(*settings, r.kind) : settings->colorPhysical;
+				ImGuiMCP::ImDrawListManager::AddRectFilled(dl, base, { base.x + width, base.y + rowH }, 0x40000000, 3.0f, 0);
+				ImGuiMCP::ImDrawListManager::AddRectFilled(dl, base, { base.x + width * frac, base.y + rowH }, ToImCol(rgb, 0x78), 3.0f, 0);
+
+				ImGuiMCP::ImDrawListManager::AddText(dl, { base.x + 6.0f, base.y + 3.0f }, ToImCol(0xFFFFFF), r.name.c_str());
+				std::string right = std::format("{:.0f}  ({:.0f}%)  {} hit{}", r.total, 100.0f * frac, r.hits, r.hits == 1 ? "" : "s");
+				if (r.crits > 0) {
+					right += std::format(", {} crit{}", r.crits, r.crits == 1 ? "" : "s");
 				}
+				if (a_showMitigated && r.mitigated > 0.0f && r.total + r.mitigated > 0.0f) {
+					right += std::format("  [{:.0f}% resisted]", 100.0f * r.mitigated / (r.total + r.mitigated));
+				}
+				ImGuiMCP::ImVec2 rightSz;
+				ImGuiMCP::CalcTextSize(&rightSz, right.c_str(), nullptr, false, -1.0f);
+				ImGuiMCP::ImDrawListManager::AddText(dl, { base.x + width - rightSz.x - 6.0f, base.y + 3.0f }, ToImCol(0xE8E8E8), right.c_str());
+				ImGuiMCP::Dummy({ width, rowH + 2.0f });
 			}
-			ImGuiMCP::EndTable();
 		}
 
 		// Per-combatant drill-down: pick a combatant, see their damage by
@@ -387,17 +437,14 @@ namespace FDNG::UI
 			ImGuiMCP::Combo(comboID.c_str(), &sel, names.data(), static_cast<int>(names.size()), -1);
 
 			const auto& c = a_session.combatants[static_cast<std::size_t>(sel)];
-			const auto srcID = std::format("##fdng_src{}", a_session.index);
-			const auto tgtID = std::format("##fdng_tgt{}", a_session.index);
-			const auto kindID = std::format("##fdng_kind{}", a_session.index);
 
 			ImGuiMCP::Text("Damage by source");
-			DrawBreakdownTable(srcID.c_str(), "Weapon / spell", c.bySource, true);
+			DrawMeterBars(c.bySource, true, true);
 			ImGuiMCP::Text("Damage by target");
-			DrawBreakdownTable(tgtID.c_str(), "Target", c.byTarget, false);
+			DrawMeterBars(c.byTarget, false, false);
 			if (!c.takenByKind.empty()) {
 				ImGuiMCP::Text("Damage taken by type (resist profile)");
-				DrawBreakdownTable(kindID.c_str(), "Type", c.takenByKind, true);
+				DrawMeterBars(c.takenByKind, true, true);
 			}
 			if (c.died) {
 				ImGuiMCP::Text("Killed by %s", c.killedBy.c_str());
@@ -425,6 +472,10 @@ namespace FDNG::UI
 				ImGuiMCP::TextDisabled("No finished combat sessions yet.");
 				return;
 			}
+
+			static char s_filter[64]{};
+			ImGuiMCP::InputTextWithHint("##fdng_filter", "Filter combatants...", s_filter, sizeof(s_filter), 0, nullptr, nullptr);
+
 			// Newest first.
 			for (auto it = history.rbegin(); it != history.rend(); ++it) {
 				const auto& s = *it;
@@ -439,7 +490,7 @@ namespace FDNG::UI
 					ImGuiMCP::PlotLines("##dps", s.dpsSamples.data(), static_cast<int>(s.dpsSamples.size()),
 						0, overlay.c_str(), 0.0f, FLT_MAX, { -1.0f, 80.0f }, sizeof(float));
 				}
-				DrawCombatantTable(s);
+				DrawCombatantTable(s, s_filter);
 				DrawSessionDrilldown(s);
 			}
 		}

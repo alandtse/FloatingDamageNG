@@ -43,41 +43,10 @@ namespace FDNG::Renderer
 		ImU32 KindColor(const Number& a_n, float a_alpha)
 		{
 			const auto settings = Settings::GetSingleton();
-			std::uint32_t rgb = settings->colorPhysical;
-			if (a_n.flags.critical) {
-				rgb = settings->colorCritical;
-			} else if (a_n.flags.blocked) {
-				rgb = settings->colorBlocked;
-			} else {
-				switch (a_n.kind) {
-				case DamageKind::kFire:
-					rgb = settings->colorFire;
-					break;
-				case DamageKind::kFrost:
-					rgb = settings->colorFrost;
-					break;
-				case DamageKind::kShock:
-					rgb = settings->colorShock;
-					break;
-				case DamageKind::kPoison:
-					rgb = settings->colorPoison;
-					break;
-				case DamageKind::kMagic:
-					rgb = settings->colorMagic;
-					break;
-				case DamageKind::kHealing:
-					rgb = settings->colorHealing;
-					break;
-				case DamageKind::kMagickaDrain:
-					rgb = settings->colorMagickaDamage;
-					break;
-				case DamageKind::kStaminaDrain:
-					rgb = settings->colorStaminaDamage;
-					break;
-				default:
-					break;
-				}
-			}
+			// Crit/blocked styling overrides the kind hue.
+			const std::uint32_t rgb = a_n.flags.critical ? settings->colorCritical :
+			                          a_n.flags.blocked  ? settings->colorBlocked :
+			                                               KindRgb(*settings, a_n.kind);
 			const auto a = static_cast<std::uint8_t>(std::clamp(a_alpha, 0.0f, 1.0f) * 255.0f);
 			return IM_COL32((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, a);
 		}

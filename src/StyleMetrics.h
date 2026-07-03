@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "Capture.h"
 #include "Settings.h"
 
 // Pure geometry shared by the in-world renderer and the SMF preview (which
@@ -56,5 +57,31 @@ namespace FDNG
 			return 0.40f + 0.35f * (a_mitigated / (a_mitigated + a_amount));
 		}
 		return 0.55f;
+	}
+
+	// The user-themed color for a damage kind (0xRRGGBB) — shared by the
+	// in-world renderer and the stats page's meter bars.
+	inline std::uint32_t KindRgb(const Settings& a_settings, DamageKind a_kind)
+	{
+		switch (a_kind) {
+		case DamageKind::kFire:
+			return a_settings.colorFire;
+		case DamageKind::kFrost:
+			return a_settings.colorFrost;
+		case DamageKind::kShock:
+			return a_settings.colorShock;
+		case DamageKind::kPoison:
+			return a_settings.colorPoison;
+		case DamageKind::kMagic:
+			return a_settings.colorMagic;
+		case DamageKind::kHealing:
+			return a_settings.colorHealing;
+		case DamageKind::kMagickaDrain:
+			return a_settings.colorMagickaDamage;
+		case DamageKind::kStaminaDrain:
+			return a_settings.colorStaminaDamage;
+		default:
+			return a_settings.colorPhysical;
+		}
 	}
 }
