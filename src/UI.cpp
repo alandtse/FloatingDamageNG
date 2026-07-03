@@ -17,6 +17,8 @@
 #include <REX/REX.h>
 #include <SKSE/SKSE.h>
 
+#include <shellapi.h>  // ShellExecuteA (WIN32_LEAN_AND_MEAN drops it from Windows.h)
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -97,6 +99,32 @@ namespace FDNG::UI
 			if (ImGuiMCP::IsItemHovered(0)) {
 				ImGuiMCP::SetTooltip("%s", a_text);
 			}
+		}
+
+		// Open a folder in Explorer, creating it first so the button always
+		// lands somewhere (the drop-in dirs may not exist yet on a fresh install).
+		void OpenFolder(const char* a_path)
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(a_path, ec);
+			ShellExecuteA(nullptr, "open", a_path, nullptr, nullptr, SW_SHOWNORMAL);
+		}
+
+		// Which preset the live motion fields currently equal (nullptr = none).
+		// Lets the preset combo show "Arc" vs "Custom" instead of a static label.
+		const char* MatchingPreset(const Settings* a_s, const std::vector<Presets::Effect>& a_presets)
+		{
+			for (const auto& p : a_presets) {
+				if (std::fabs(p.motion.riseSpeed - a_s->motion.riseSpeed) < 0.5f &&
+					std::fabs(p.motion.riseAccel - a_s->motion.riseAccel) < 0.5f &&
+					std::fabs(p.motion.lateralSpeed - a_s->motion.lateralSpeed) < 0.5f &&
+					std::fabs(p.motion.lateralDamping - a_s->motion.lateralDamping) < 0.05f &&
+					p.spread == a_s->spreadPattern &&
+					std::fabs(p.spawnAngleDeg - a_s->spawnAngleDeg) < 0.5f) {
+					return p.name.c_str();
+				}
+			}
+			return nullptr;
 		}
 
 		bool IContains(const char* a_hay, const char* a_needle)
@@ -270,6 +298,14 @@ namespace FDNG::UI
 				Tip("Type to filter your installed fonts. Applies on game restart; (auto) uses the mod font, then a bold Windows system font.");
 				ImGuiMCP::SameLine(0.0f, -1.0f);
 				ImGuiMCP::TextDisabled("(restart)");
+				if (ImGuiMCP::Button("Open fonts folder", { 0, 0 })) {
+					OpenFolder("Data/SKSE/Plugins/FloatingDamageNG/Fonts");
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Rescan", { 0, 0 })) {
+					Fonts::RefreshAvailable();
+				}
+				Tip("Drop .ttf/.otf files in the folder, click Rescan to list them here. A picked font takes effect on the next game start.");
 				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
 				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
 				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.1f, 2.0f, "%.2f", 0);
@@ -284,16 +320,25 @@ namespace FDNG::UI
 				// A preset (built-in or a shared JSON file) copies its bundle
 				// into the live fields; tune from there.
 				const auto& presets = Presets::All();
-				// The preset combo is a LOAD action — it copies a preset's
-				// bundle into the live fields below, which are what persist.
-				// Modelling it as an action (not a sticky selection) avoids the
-				// combo drifting out of sync once the fields are tuned.
-				if (ImGuiMCP::BeginCombo("Preset", "Load a preset...", 0)) {
+				// The preview tracks the live fields: it names the preset they
+				// currently equal, or "<last loaded> (modified)" once tuned, so
+				// the combo never claims a preset that isn't actually active.
+				static std::string lastLoaded;
+				std::string preview;
+				if (const char* match = MatchingPreset(s, presets)) {
+					preview = match;
+				} else if (!lastLoaded.empty()) {
+					preview = std::format("{} (modified)", lastLoaded);
+				} else {
+					preview = "Custom";
+				}
+				if (ImGuiMCP::BeginCombo("Preset", preview.c_str(), 0)) {
 					for (const auto& p : presets) {
 						if (ImGuiMCP::Selectable(p.name.c_str(), false, 0, { 0, 0 })) {
 							s->motion = p.motion;
 							s->spreadPattern = p.spread;
 							s->spawnAngleDeg = p.spawnAngleDeg;
+							lastLoaded = p.name;
 						}
 					}
 					ImGuiMCP::EndCombo();
@@ -349,6 +394,10 @@ namespace FDNG::UI
 				ImGuiMCP::SameLine(0.0f, -1.0f);
 				if (ImGuiMCP::Button("Reload presets", { 0, 0 })) {
 					Presets::Reload();
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Open folder", { 0, 0 })) {
+					OpenFolder("Data/SKSE/Plugins/FloatingDamageNG/Presets");
 				}
 				if (!saveMsg.empty()) {
 					ImGuiMCP::TextDisabled("%s", saveMsg.c_str());

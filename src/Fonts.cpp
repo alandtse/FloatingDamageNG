@@ -89,11 +89,15 @@ namespace FDNG::Fonts
 		return io.FontDefault;
 	}
 
-	const std::vector<std::pair<std::string, std::string>>& Available()
+	namespace
 	{
-		static std::vector<std::pair<std::string, std::string>> fonts = [] {
-			std::vector<std::pair<std::string, std::string>> out;
-			const auto scan = [&](const std::filesystem::path& a_dir) {
+		std::vector<std::pair<std::string, std::string>> g_available;
+		bool g_availableLoaded = false;
+
+		void ScanAvailable()
+		{
+			g_available.clear();
+			const auto scan = [](const std::filesystem::path& a_dir) {
 				std::error_code ec;
 				if (!std::filesystem::is_directory(a_dir, ec)) {
 					return;
@@ -105,7 +109,7 @@ namespace FDNG::Fonts
 					auto ext = e.path().extension().string();
 					std::ranges::transform(ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(c)); });
 					if (ext == ".ttf" || ext == ".otf") {
-						out.emplace_back(e.path().stem().string(), e.path().string());
+						g_available.emplace_back(e.path().stem().string(), e.path().string());
 					}
 				}
 			};
@@ -117,9 +121,22 @@ namespace FDNG::Fonts
 			if (GetEnvironmentVariableA("WINDIR", windir, MAX_PATH) > 0) {
 				scan(std::filesystem::path(windir) / "Fonts");
 			}
-			std::ranges::sort(out, [](const auto& a, const auto& b) { return a.first < b.first; });
-			return out;
-		}();
-		return fonts;
+			std::ranges::sort(g_available, [](const auto& a, const auto& b) { return a.first < b.first; });
+		}
+	}
+
+	const std::vector<std::pair<std::string, std::string>>& Available()
+	{
+		if (!g_availableLoaded) {
+			ScanAvailable();
+			g_availableLoaded = true;
+		}
+		return g_available;
+	}
+
+	void RefreshAvailable()
+	{
+		ScanAvailable();
+		g_availableLoaded = true;
 	}
 }

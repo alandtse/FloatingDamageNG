@@ -21,6 +21,11 @@ namespace FDNG::Fonts
 	// (game restart).
 	const std::vector<std::pair<std::string, std::string>>& Available();
 
+	// Rescan the font folders (call after the user drops a file in). The list
+	// still only becomes usable in-world on the next context load (restart),
+	// but it lets the picker show the new file immediately.
+	void RefreshAvailable();
+
 	// The font a given damage kind should draw with in the CURRENT ImGui
 	// context: its per-kind override (fontByKind) if loaded, else the default
 	// font. Per-context (flat and VR keep separate atlases).
