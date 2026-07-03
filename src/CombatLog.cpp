@@ -117,7 +117,7 @@ namespace FDNG
 	{
 		// Main thread, _lock held; the engine reads here are safe because no
 		// other thread contends _lock while also holding engine locks (sinks
-		// stash POD only) — but keep them minimal and first-touch only.
+		// stash POD only) - but keep them minimal and first-touch only.
 		auto& c = _combatants[a_actor->GetFormID()];
 		if (c.name.empty()) {
 			const char* name = a_actor->GetName();
@@ -136,7 +136,7 @@ namespace FDNG
 			return;
 		}
 		const auto player = RE::PlayerCharacter::GetSingleton();
-		// A session is any fight worth logging — the player's own, or an
+		// A session is any fight worth logging - the player's own, or an
 		// NPC-only brawl flagged by the hint combatant.
 		if (!player || (!player->IsInCombat() && !(a_hint && a_hint->IsInCombat()))) {
 			return;
@@ -236,7 +236,7 @@ namespace FDNG
 
 	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::TESCombatEvent* a_event, RE::BSTEventSource<RE::TESCombatEvent>*)
 	{
-		// Engine thread — POD handoff only (see class comment).
+		// Engine thread - POD handoff only (see class comment).
 		if (!a_event || a_event->newState != RE::ACTOR_COMBAT_STATE::kCombat) {
 			return RE::BSEventNotifyControl::kContinue;
 		}
@@ -248,7 +248,7 @@ namespace FDNG
 
 	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::TESDeathEvent* a_event, RE::BSTEventSource<RE::TESDeathEvent>*)
 	{
-		// Engine thread — POD handoff only (see class comment).
+		// Engine thread - POD handoff only (see class comment).
 		if (!a_event || !a_event->dead || !a_event->actorDying) {
 			return RE::BSEventNotifyControl::kContinue;
 		}
@@ -272,7 +272,7 @@ namespace FDNG
 			EnsureSession(RE::TESForm::LookupByID<RE::Actor>(hintID));
 		}
 
-		// Cheap 1 Hz poll — combat-state exit has no reliable single event.
+		// Cheap 1 Hz poll - combat-state exit has no reliable single event.
 		const auto now = Clock::now();
 		if (now - _lastTickCheck < std::chrono::seconds(1)) {
 			return;
@@ -456,18 +456,18 @@ namespace FDNG
 			logger::warn("Could not open combat log file for writing.");
 			return;
 		}
-		out << std::format("=== Session #{} — {} @ {} — {:.1f}s ===\n", a_summary.index, a_summary.startedAt, a_summary.location, a_summary.duration);
+		out << std::format("=== Session #{} - {} @ {} - {:.1f}s ===\n", a_summary.index, a_summary.startedAt, a_summary.location, a_summary.duration);
 		out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active, peak {:.0f})\n",
 			a_summary.playerDamage, a_summary.realDPS, a_summary.activeDPS, _playerActiveSeconds, a_summary.peakDPS);
 		for (const auto& c : a_summary.combatants) {
 			std::string fate;
 			if (c.died) {
-				fate = c.timeToDie >= 0.0f ? std::format(" — died (TTD {:.1f}s, by {})", c.timeToDie, c.killedBy) :
-				                             std::format(" — died (by {})", c.killedBy);
+				fate = c.timeToDie >= 0.0f ? std::format(" - died (TTD {:.1f}s, by {})", c.timeToDie, c.killedBy) :
+				                             std::format(" - died (by {})", c.killedBy);
 			} else if (c.fled) {
-				fate = " — survived/fled";
+				fate = " - survived/fled";
 			}
-			out << std::format("  {}{} — dealt {:.0f} ({} hits, {} crit{}), taken {:.0f}{}{}\n",
+			out << std::format("  {}{} - dealt {:.0f} ({} hits, {} crit{}), taken {:.0f}{}{}\n",
 				c.name,
 				c.isFollower ? " (follower)" : (c.isHostileToPlayer ? " (hostile)" : ""),
 				c.damageDealt, c.hitsDealt, c.critsDealt, c.critsDealt == 1 ? "" : "s",
