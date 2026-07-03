@@ -132,7 +132,7 @@ namespace FDNG::Renderer
 			if (!settings->squashStretch) {
 				return { 1.0f, 1.0f };
 			}
-			const auto& m = settings->motion;
+			const auto& m = a_n.motion;  // per-kind or global, resolved at spawn
 			const float t = a_n.age * settings->globalSpeedMultiplier;
 			const float vy = m.riseSpeed + m.riseAccel * t;
 			const float vlat = m.lateralDamping > 0.001f ? m.lateralSpeed * std::exp(-m.lateralDamping * t) : m.lateralSpeed;

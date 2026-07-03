@@ -104,6 +104,19 @@ namespace FDNG::Presets
 		g_loaded = true;
 	}
 
+	const Effect* ByName(std::string_view a_name)
+	{
+		if (a_name.empty()) {
+			return nullptr;
+		}
+		for (const auto& e : All()) {
+			if (e.name == a_name) {
+				return &e;
+			}
+		}
+		return nullptr;
+	}
+
 	bool Save(const Effect& a_effect)
 	{
 		const auto file = SanitizeFileName(a_effect.name);

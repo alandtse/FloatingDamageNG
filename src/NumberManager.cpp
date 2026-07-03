@@ -3,6 +3,7 @@
 
 #include "NumberManager.h"
 
+#include "Presets.h"
 #include "Settings.h"
 
 namespace FDNG
@@ -181,12 +182,25 @@ namespace FDNG
 		const RE::NiPoint3 up{ 0.0f, 0.0f, 1.0f };
 		const auto k = static_cast<int>(victimCount);
 
-		switch (settings->spreadPattern) {
+		// Resolve this number's effect: a per-kind preset override, else the
+		// global effect. Snapshotted here so the render loop stays lookup-free.
+		n.motion = settings->motion;
+		SpreadPattern spreadPattern = settings->spreadPattern;
+		float spawnAngleDeg = settings->spawnAngleDeg;
+		if (const auto kindIdx = std::to_underlying(a_event.kind); kindIdx < settings->motionByKind.size()) {
+			if (const auto* effect = Presets::ByName(settings->motionByKind[kindIdx])) {
+				n.motion = effect->motion;
+				spreadPattern = effect->spread;
+				spawnAngleDeg = effect->spawnAngleDeg;
+			}
+		}
+
+		switch (spreadPattern) {
 		case SpreadPattern::kRotate:
 			{
 				// Fireworks: each hit rotates the launch around the view axis; the
 				// launch tilts up-and-out so numbers spray diagonally.
-				const float ang = static_cast<float>(k) * settings->spawnAngleDeg * kDegToRad;
+				const float ang = static_cast<float>(k) * spawnAngleDeg * kDegToRad;
 				const RE::NiPoint3 dir = right * std::cos(ang) + up * std::sin(ang);
 				n.launchDir = dir;
 				n.spread = { 0.0f, 0.0f, 0.0f };
@@ -196,7 +210,7 @@ namespace FDNG
 			{
 				// Alternate up-left / up-right diagonals at the configured tilt.
 				const float side = (k % 2 == 1) ? 1.0f : -1.0f;
-				const float tilt = std::clamp(settings->spawnAngleDeg, 0.0f, 89.0f) * kDegToRad;
+				const float tilt = std::clamp(spawnAngleDeg, 0.0f, 89.0f) * kDegToRad;
 				n.launchDir = right * (side * std::cos(tilt)) + up * std::sin(tilt);
 				n.spread = right * (side * kSpreadStep * 0.5f * static_cast<float>((k + 1) / 2));
 				break;
@@ -222,8 +236,9 @@ namespace FDNG
 	{
 		// Data-driven path: travel along the number's launch direction plus an
 		// independent vertical term. Every built-in effect (Float/Arc/Radial/
-		// Fireworks) is a parameter set fed through this one integrator.
-		const auto& m = Settings::GetSingleton()->motion;
+		// Fireworks) is a parameter set fed through this one integrator. The
+		// profile was resolved (per-kind or global) at spawn.
+		const auto& m = a_number.motion;
 		const float t = a_number.age * Settings::GetSingleton()->globalSpeedMultiplier;
 
 		const float travel = m.lateralDamping > 0.001f ?

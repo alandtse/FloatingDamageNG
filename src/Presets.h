@@ -29,6 +29,9 @@ namespace FDNG::Presets
 	const std::vector<Effect>& All();
 	void Reload();
 
+	// Preset by name, or nullptr when the name is empty/unknown.
+	const Effect* ByName(std::string_view a_name);
+
 	// Write an effect as <name>.json to the user preset directory (creating it).
 	// Returns false on an unsafe/empty name or a write failure.
 	bool Save(const Effect& a_effect);

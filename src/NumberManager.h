@@ -4,6 +4,7 @@
 #pragma once
 
 #include "Capture.h"
+#include "Settings.h"
 
 namespace FDNG
 {
@@ -16,6 +17,7 @@ namespace FDNG
 		RE::NiPoint3 anchor;     // victim head; refreshed each frame while the victim is loaded
 		RE::NiPoint3 spread;     // anti-stacking displacement (fixed at spawn)
 		RE::NiPoint3 launchDir;  // unit launch direction (may be diagonal for burst patterns)
+		MotionProfile motion;    // resolved effect (per-kind override or global), fixed at spawn
 		float age{ 0.0f };       // seconds since spawn
 		float lifetime{ 1.5f };
 		float amount{ 0.0f };

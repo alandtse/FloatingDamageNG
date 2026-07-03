@@ -106,6 +106,11 @@ namespace FDNG
 		float rapidHitBias{ 0.0f };  // -1 all left ... 0 alternate ... +1 all right
 		bool previewMode{ false };   // spawn sample numbers on the selected ref (or player)
 
+		// [PerType] — optional per-damage-kind effect override: a preset name
+		// per DamageKind (index = std::to_underlying); empty = use the global
+		// effect above. Lets fire spray while frost drifts, etc.
+		std::array<std::string, 9> motionByKind{};
+
 		// [Behavior]
 		bool showMitigation{ true };
 		float minDamageToShow{ 1.0f };

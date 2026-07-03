@@ -285,6 +285,31 @@ namespace FDNG::UI
 				ImGuiMCP::TextDisabled("Saved to Data/SKSE/Plugins/FloatingDamageNG/Presets - share the .json to trade effects.");
 			}
 
+			if (ImGuiMCP::CollapsingHeader("Per-type effects", 0)) {
+				ImGuiMCP::TextDisabled("Give a damage type its own effect (e.g. fire sprays, frost drifts). (global) uses the effect above.");
+				const auto& presets = Presets::All();
+				std::vector<const char*> options;
+				options.reserve(presets.size() + 1);
+				options.push_back("(global)");
+				for (const auto& p : presets) {
+					options.push_back(p.name.c_str());
+				}
+				static const char* kKindLabels[] = { "Physical", "Fire", "Frost", "Shock", "Poison", "Magic", "Healing", "Magicka drain", "Stamina drain" };
+				for (int i = 0; i < 9; ++i) {
+					int sel = 0;
+					for (int j = 0; j < static_cast<int>(presets.size()); ++j) {
+						if (presets[static_cast<std::size_t>(j)].name == s->motionByKind[static_cast<std::size_t>(i)]) {
+							sel = j + 1;
+							break;
+						}
+					}
+					const auto id = std::format("{}##fdng_kindfx{}", kKindLabels[i], i);
+					if (ImGuiMCP::Combo(id.c_str(), &sel, options.data(), static_cast<int>(options.size()), -1)) {
+						s->motionByKind[static_cast<std::size_t>(i)] = sel == 0 ? std::string{} : presets[static_cast<std::size_t>(sel - 1)].name;
+					}
+				}
+			}
+
 			if (ImGuiMCP::CollapsingHeader("Spawn origin", 0)) {
 				ImGuiMCP::SliderFloat("Offset up", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
 				ImGuiMCP::SliderFloat("Offset toward you", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
