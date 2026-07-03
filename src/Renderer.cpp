@@ -33,10 +33,10 @@ namespace FDNG::Renderer
 		constexpr float kWorldMetersPerPanelPixel = 0.0016875f;
 		// Quads are physically sized, so beyond the reference distance their
 		// angular size drops below HMD readability (an NPC number is ~5 cm -
-		// arc-minutes at a 20 m brawl). Grow them with distance, capped so a
-		// far skirmish reads as a hint rather than a billboard wall.
-		constexpr float kQuadRefDistanceMeters = 3.5f;
-		constexpr float kQuadMaxDistanceBoost = 8.0f;
+		// arc-minutes at a 20 m brawl). They grow with distance, capped so a
+		// far skirmish reads as a hint rather than a billboard wall; the
+		// reference distance and cap are the user's distanceRefMeters /
+		// vrDistanceMaxBoost (flat uses the same reference with a shrink floor).
 		// NPC in-view test margin beyond the screen edges, so head/camera
 		// motion does not pop numbers at the periphery.
 		constexpr float kFrustumMargin = 0.3f;
@@ -362,7 +362,7 @@ namespace FDNG::Renderer
 				rowH = std::max(rowH, blockSz.y);
 
 				const float distMeters = anchorPos.GetDistance(worldPos) * kGameUnitToMeter;
-				const float distanceBoost = std::clamp(distMeters / kQuadRefDistanceMeters, 1.0f, kQuadMaxDistanceBoost);
+				const float distanceBoost = std::clamp(distMeters / settings->distanceRefMeters, 1.0f, settings->vrDistanceMaxBoost);
 				const float heightMeters = blockSz.y * kWorldMetersPerPanelPixel * distanceBoost;
 
 				RE::NiPoint3 quadPos = worldPos;
@@ -447,10 +447,11 @@ namespace FDNG::Renderer
 					}
 					screenPos = ImVec2(displaySize.x * rn.screenX, displaySize.y * (1.0f - rn.screenY));
 
-					// Perspective size: full size inside ~3.5 m, shrinking with
-					// distance.
+					// Perspective size: full size within the reference distance,
+					// shrinking past it but floored so distant (ranged) hits stay
+					// legible.
 					const float distMeters = std::max(playerPos.GetDistance(rn.worldPos) * kGameUnitToMeter, 0.1f);
-					const float perspective = std::clamp(kQuadRefDistanceMeters / distMeters, 0.25f, 1.25f);
+					const float perspective = std::clamp(settings->distanceRefMeters / distMeters, settings->flatDistanceMinScale, 1.25f);
 					fontPx = BaseFontPx() * rn.scale * perspective;
 				}
 

@@ -70,6 +70,10 @@ namespace FDNG
 		squashStretch = ini.GetBoolValue("DynamicSizing", "bSquashStretch", squashStretch);
 		stretchIntensity = std::clamp(static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fStretchIntensity", stretchIntensity)), 0.0f, 1.0f);
 
+		distanceRefMeters = std::clamp(static_cast<float>(ini.GetDoubleValue("Distance", "fReferenceMeters", distanceRefMeters)), 1.0f, 30.0f);
+		flatDistanceMinScale = std::clamp(static_cast<float>(ini.GetDoubleValue("Distance", "fFlatMinScale", flatDistanceMinScale)), 0.1f, 1.5f);
+		vrDistanceMaxBoost = std::clamp(static_cast<float>(ini.GetDoubleValue("Distance", "fVRMaxBoost", vrDistanceMaxBoost)), 1.0f, 16.0f);
+
 		// Seed the active motion path from the last-applied preset, then let
 		// explicit fields override — so a legacy INI (preset index only) still
 		// gets sensible values and a tuned INI keeps its custom path.
@@ -204,6 +208,10 @@ namespace FDNG
 		ini.SetBoolValue("DynamicSizing", "bAbbreviateNumbers", abbreviateNumbers);
 		ini.SetBoolValue("DynamicSizing", "bSquashStretch", squashStretch);
 		ini.SetDoubleValue("DynamicSizing", "fStretchIntensity", stretchIntensity);
+
+		ini.SetDoubleValue("Distance", "fReferenceMeters", distanceRefMeters);
+		ini.SetDoubleValue("Distance", "fFlatMinScale", flatDistanceMinScale);
+		ini.SetDoubleValue("Distance", "fVRMaxBoost", vrDistanceMaxBoost);
 
 		ini.SetValue("Font", "sFontPath", fontPath.c_str());
 

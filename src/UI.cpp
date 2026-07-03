@@ -355,6 +355,15 @@ namespace FDNG::UI
 				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
 				ImGuiMCP::Checkbox("Abbreviate big numbers", &s->abbreviateNumbers);
 				Tip("Show 10000+ as 1.2k / 3.4M to keep late-game numbers compact.");
+
+				ImGuiMCP::SeparatorText("Distance");
+				ImGuiMCP::TextDisabled("How size responds to how far the target is (ranged readability).");
+				ImGuiMCP::SliderFloat("Reference distance (m)", &s->distanceRefMeters, 1.0f, 30.0f, "%.1f", 0);
+				Tip("Numbers are full size within this range. Raise it to keep numbers big further out (e.g. for bows).");
+				ImGuiMCP::SliderFloat("Flat: min size at distance", &s->flatDistanceMinScale, 0.1f, 1.5f, "%.2f", 0);
+				Tip("Flat only: how small a far number may shrink. 1.0 = never shrinks. Raise this if ranged numbers look too small.");
+				ImGuiMCP::SliderFloat("VR: max size boost at distance", &s->vrDistanceMaxBoost, 1.0f, 16.0f, "%.1f", 0);
+				Tip("VR only: how much far numbers grow to stay readable at range. Higher = bigger distant numbers.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Motion effect", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {

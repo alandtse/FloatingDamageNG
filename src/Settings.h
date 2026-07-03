@@ -101,6 +101,15 @@ namespace FDNG
 		float logScaleModifier{ 0.25f };
 		float maxFontScaleCeiling{ 1.6f };
 		bool abbreviateNumbers{ false };  // 10000+ only: 12345 -> 12k, 3400000 -> 3.4M
+
+		// [Distance] — how number size responds to how far the target is (the
+		// ranged-attack readability knobs). Reference distance is shared: within
+		// it, numbers are full size. Flat shrinks past it (floored so distant
+		// hits stay legible); VR grows the physical quad past it (capped) to
+		// hold angular size. 1.0 flat floor = never shrink.
+		float distanceRefMeters{ 3.5f };
+		float flatDistanceMinScale{ 0.5f };  // flat: smallest a far number gets
+		float vrDistanceMaxBoost{ 8.0f };    // VR: largest a far quad grows
 		// Squash-and-stretch: distort the number vertically while it moves
 		// fast, easing to normal as it slows (launch "juice"). Opt-in.
 		bool squashStretch{ false };
