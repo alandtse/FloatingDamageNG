@@ -286,27 +286,48 @@ namespace FDNG::UI
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Per-type effects", 0)) {
-				ImGuiMCP::TextDisabled("Give a damage type its own effect (e.g. fire sprays, frost drifts). (global) uses the effect above.");
+				ImGuiMCP::TextDisabled("Give a damage type its own motion and/or font (e.g. fire sprays, frost drifts). (global) uses the settings above; a font change applies on restart.");
 				const auto& presets = Presets::All();
-				std::vector<const char*> options;
-				options.reserve(presets.size() + 1);
-				options.push_back("(global)");
+				std::vector<const char*> motionOpts;
+				motionOpts.reserve(presets.size() + 1);
+				motionOpts.push_back("(global)");
 				for (const auto& p : presets) {
-					options.push_back(p.name.c_str());
+					motionOpts.push_back(p.name.c_str());
+				}
+				const auto& avail = Fonts::Available();
+				std::vector<const char*> fontOpts;
+				fontOpts.reserve(avail.size() + 1);
+				fontOpts.push_back("(global)");
+				for (const auto& f : avail) {
+					fontOpts.push_back(f.first.c_str());
 				}
 				static const char* kKindLabels[] = { "Physical", "Fire", "Frost", "Shock", "Poison", "Magic", "Healing", "Magicka drain", "Stamina drain" };
 				for (int i = 0; i < 9; ++i) {
-					int sel = 0;
+					const auto idx = static_cast<std::size_t>(i);
+					ImGuiMCP::Text("%s", kKindLabels[i]);
+					int mSel = 0;
 					for (int j = 0; j < static_cast<int>(presets.size()); ++j) {
-						if (presets[static_cast<std::size_t>(j)].name == s->motionByKind[static_cast<std::size_t>(i)]) {
-							sel = j + 1;
+						if (presets[static_cast<std::size_t>(j)].name == s->motionByKind[idx]) {
+							mSel = j + 1;
 							break;
 						}
 					}
-					const auto id = std::format("{}##fdng_kindfx{}", kKindLabels[i], i);
-					if (ImGuiMCP::Combo(id.c_str(), &sel, options.data(), static_cast<int>(options.size()), -1)) {
-						s->motionByKind[static_cast<std::size_t>(i)] = sel == 0 ? std::string{} : presets[static_cast<std::size_t>(sel - 1)].name;
+					const auto mId = std::format("motion##fdng_km{}", i);
+					if (ImGuiMCP::Combo(mId.c_str(), &mSel, motionOpts.data(), static_cast<int>(motionOpts.size()), -1)) {
+						s->motionByKind[idx] = mSel == 0 ? std::string{} : presets[static_cast<std::size_t>(mSel - 1)].name;
 					}
+					int fSel = 0;
+					for (int j = 0; j < static_cast<int>(avail.size()); ++j) {
+						if (avail[static_cast<std::size_t>(j)].second == s->fontByKind[idx]) {
+							fSel = j + 1;
+							break;
+						}
+					}
+					const auto fId = std::format("font##fdng_kf{}", i);
+					if (ImGuiMCP::Combo(fId.c_str(), &fSel, fontOpts.data(), static_cast<int>(fontOpts.size()), -1)) {
+						s->fontByKind[idx] = fSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fSel - 1)].second;
+					}
+					ImGuiMCP::Separator();
 				}
 			}
 

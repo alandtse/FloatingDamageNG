@@ -100,8 +100,10 @@ namespace FDNG
 		// previewMode is intentionally NOT persisted — it is a live tuning aid.
 
 		for (std::size_t i = 0; i < kKindKeys.size(); ++i) {
-			const char* v = ini.GetValue("PerType", std::format("sMotion{}", kKindKeys[i]).c_str());
-			motionByKind[i] = v ? v : "";
+			const char* motion = ini.GetValue("PerType", std::format("sMotion{}", kKindKeys[i]).c_str());
+			motionByKind[i] = motion ? motion : "";
+			const char* font = ini.GetValue("PerType", std::format("sFont{}", kKindKeys[i]).c_str());
+			fontByKind[i] = font ? font : "";
 		}
 
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
@@ -238,6 +240,7 @@ namespace FDNG
 
 		for (std::size_t i = 0; i < kKindKeys.size(); ++i) {
 			ini.SetValue("PerType", std::format("sMotion{}", kKindKeys[i]).c_str(), motionByKind[i].c_str());
+			ini.SetValue("PerType", std::format("sFont{}", kKindKeys[i]).c_str(), fontByKind[i].c_str());
 		}
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);

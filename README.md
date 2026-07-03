@@ -34,14 +34,16 @@ armor)`, `(-30 blocked)` with the true blocked amount, or `(-20 resisted)` —
   burst, and Fireworks (rotating diagonal spray). A preset seeds a small set
   of physics knobs — rise speed, gravity, launch speed, damping, plus the
   spread pattern (alternate / rotate / diagonal) and per-hit angle — that you
-  can freely edit; the built-ins are defined the exact same way, and a custom
+  can freely edit; the built-ins are defined the exact same way, a custom
   effect **saves to a shareable JSON preset file** you can trade. Optional
   number abbreviation (`1.2k`) and squash-and-stretch launch juice. Font
   (picked in-game from your installed TTFs), size, base scale, and how much
   big hits grow are all controls, and the spawn point can be nudged up /
   toward you / sideways. A **live preview** spawns sample numbers on your
   console-selected target (`prid`, falling back to you) so you can tune it
-  all in real time.
+  all in real time. Any damage type can also get **its own effect and font**
+  — fire sprays while frost drifts — the same way it already gets its own
+  color.
 - **Whose fight it is** reads from a selectable origin marker — colored text
   outline, underline, or box (your hits black, damage you take red, follower
   damage blue, bystander fights gray; all themable, with a live preview in the

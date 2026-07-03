@@ -3,6 +3,10 @@
 
 #pragma once
 
+#include "Capture.h"  // DamageKind
+
+struct ImFont;
+
 namespace FDNG::Fonts
 {
 	// Load a real TTF into the CURRENT ImGui context and make it the default
@@ -12,7 +16,13 @@ namespace FDNG::Fonts
 	void Load();
 
 	// Selectable fonts for the config UI: {display name, absolute path}, from
-	// the mod's font folder and the Windows font directory. Cached; a font
-	// change (sFontPath) applies on the next context load (game restart).
+	// the drop-in folder, the mod's font folder, and the Windows font
+	// directory. Cached; a font change applies on the next context load
+	// (game restart).
 	const std::vector<std::pair<std::string, std::string>>& Available();
+
+	// The font a given damage kind should draw with in the CURRENT ImGui
+	// context: its per-kind override (fontByKind) if loaded, else the default
+	// font. Per-context (flat and VR keep separate atlases).
+	ImFont* ForKind(DamageKind a_kind);
 }

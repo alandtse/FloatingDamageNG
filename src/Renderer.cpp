@@ -147,7 +147,7 @@ namespace FDNG::Renderer
 		ImVec2 DrawNumberBlock(ImDrawList* a_drawList, const ResolvedNumber& a_rn, ImVec2 a_topLeft, float a_fontPx)
 		{
 			const auto& n = *a_rn.number;
-			ImFont* font = ImGui::GetFont();
+			ImFont* font = Fonts::ForKind(n.kind);  // per-kind override or the default
 			const float mainPx = a_fontPx;
 			const float subPx = a_fontPx * SubtextRatio(n.amount, n.mitigated);
 

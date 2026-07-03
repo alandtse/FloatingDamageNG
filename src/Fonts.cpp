@@ -6,6 +6,8 @@
 #include "Settings.h"
 
 #include <cctype>
+#include <unordered_map>
+#include <utility>
 
 namespace FDNG::Fonts
 {
@@ -30,22 +32,61 @@ namespace FDNG::Fonts
 		}
 	}
 
+	namespace
+	{
+		// Per-atlas (per-context) kind fonts, since flat and VR keep separate
+		// atlases. nullptr entries fall back to the default font.
+		std::unordered_map<ImFontAtlas*, std::array<ImFont*, 9>> g_kindFonts;
+
+		ImFont* LoadInto(ImFontAtlas* a_atlas, const std::string& a_path, std::unordered_map<std::string, ImFont*>& a_seen)
+		{
+			if (a_path.empty() || GetFileAttributesA(a_path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+				return nullptr;
+			}
+			if (const auto it = a_seen.find(a_path); it != a_seen.end()) {
+				return it->second;  // one ImFont per distinct path per atlas
+			}
+			ImFont* font = a_atlas->AddFontFromFileTTF(a_path.c_str(), 48.0f);
+			a_seen[a_path] = font;
+			return font;
+		}
+	}
+
 	void Load()
 	{
 		auto& io = ImGui::GetIO();
+		std::unordered_map<std::string, ImFont*> seen;
+
+		// Default font: first available candidate.
 		for (const auto& path : CandidatePaths()) {
-			if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
-				continue;
-			}
-			// The size is only the default; draw calls request their own size
-			// and the atlas rasterizes each one from the vector outlines.
-			if (ImFont* font = io.Fonts->AddFontFromFileTTF(path.c_str(), 48.0f)) {
+			if (ImFont* font = LoadInto(io.Fonts, path, seen)) {
 				io.FontDefault = font;
 				logger::info("Loaded damage font '{}'.", path);
-				return;
+				break;
 			}
 		}
-		logger::warn("No TTF font found; falling back to the embedded bitmap font (numbers will look pixelated).");
+		if (!io.FontDefault) {
+			logger::warn("No TTF font found; falling back to the embedded bitmap font (numbers will look pixelated).");
+		}
+
+		// Per-kind overrides into the same atlas (deduped against the default).
+		std::array<ImFont*, 9> kinds{};
+		const auto& byKind = Settings::GetSingleton()->fontByKind;
+		for (std::size_t i = 0; i < byKind.size(); ++i) {
+			kinds[i] = LoadInto(io.Fonts, byKind[i], seen);
+		}
+		g_kindFonts[io.Fonts] = kinds;
+	}
+
+	ImFont* ForKind(DamageKind a_kind)
+	{
+		auto& io = ImGui::GetIO();
+		if (const auto it = g_kindFonts.find(io.Fonts); it != g_kindFonts.end()) {
+			if (ImFont* f = it->second[static_cast<std::size_t>(std::to_underlying(a_kind))]) {
+				return f;
+			}
+		}
+		return io.FontDefault;
 	}
 
 	const std::vector<std::pair<std::string, std::string>>& Available()
