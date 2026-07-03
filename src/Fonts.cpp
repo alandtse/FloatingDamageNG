@@ -68,6 +68,9 @@ namespace FDNG::Fonts
 					}
 				}
 			};
+			// User drop-in folder first (alongside Presets), then the
+			// mod-shipped font, then the system fonts.
+			scan("Data/SKSE/Plugins/FloatingDamageNG/Fonts");
 			scan("Data/Interface/FloatingDamageNG");
 			char windir[MAX_PATH]{};
 			if (GetEnvironmentVariableA("WINDIR", windir, MAX_PATH) > 0) {

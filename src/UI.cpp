@@ -188,9 +188,9 @@ namespace FDNG::UI
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Size", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
-				// Font choice: "(auto)" plus every TTF/OTF found in the mod's
-				// font folder and Windows\Fonts. A change applies on restart
-				// (the atlas is baked once per context).
+				// Font choice: "(auto)" plus every TTF/OTF found in the user
+				// drop-in folder, the mod's font folder, and Windows\Fonts. A
+				// change applies on restart (the atlas is baked once per context).
 				const auto& avail = Fonts::Available();
 				std::vector<const char*> fontNames;
 				fontNames.reserve(avail.size() + 1);
