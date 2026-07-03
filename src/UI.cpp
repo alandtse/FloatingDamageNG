@@ -208,6 +208,26 @@ namespace FDNG::UI
 		{
 			auto* s = Settings::GetSingleton();
 
+			// Live preview up top: it exercises everything below (motion,
+			// font, colors, offset), so it isn't specific to any one section.
+			ImGuiMCP::Checkbox("Live preview", &s->previewMode);
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			if (s->previewMode) {
+				const char* target = "you (no target selected)";
+				if (const auto sel = RE::Console::GetSelectedRef()) {
+					if (const char* nm = sel->GetName(); nm && nm[0]) {
+						target = nm;
+					} else {
+						target = "selected reference";
+					}
+				}
+				ImGuiMCP::Text("- spawning sample numbers on: %s", target);
+				Tip("Open the console and click an NPC (or 'prid <FormID>') to target it; otherwise it falls back to you.");
+			} else {
+				ImGuiMCP::TextDisabled("- sample numbers to tune motion/font/colors live");
+			}
+			ImGuiMCP::Separator();
+
 			if (ImGuiMCP::CollapsingHeader("What to show", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGuiMCP::Checkbox("Your damage", &s->showPlayerDamageDealt);
 				ImGuiMCP::Checkbox("Follower damage", &s->showFollowerDamageDealt);
@@ -340,70 +360,65 @@ namespace FDNG::UI
 			if (ImGuiMCP::CollapsingHeader("Per-type effects", 0)) {
 				ImGuiMCP::TextDisabled("Give a damage type its own motion and/or font (e.g. fire sprays, frost drifts). (global) uses the settings above; a font change applies on restart.");
 				const auto& presets = Presets::All();
-				std::vector<const char*> motionOpts;
-				motionOpts.reserve(presets.size() + 1);
-				motionOpts.push_back("(global)");
+				std::vector<const char*> motionOpts{ "(global)" };
 				for (const auto& p : presets) {
 					motionOpts.push_back(p.name.c_str());
 				}
 				const auto& avail = Fonts::Available();
-				std::vector<const char*> fontOpts;
-				fontOpts.reserve(avail.size() + 1);
-				fontOpts.push_back("(global)");
+				std::vector<const char*> fontOpts{ "(global)" };
 				for (const auto& f : avail) {
 					fontOpts.push_back(f.first.c_str());
 				}
 				static const char* kKindLabels[] = { "Physical", "Fire", "Frost", "Shock", "Poison", "Magic", "Healing", "Magicka drain", "Stamina drain" };
-				for (int i = 0; i < 9; ++i) {
-					const auto idx = static_cast<std::size_t>(i);
-					ImGuiMCP::Text("%s", kKindLabels[i]);
-					int mSel = 0;
-					for (int j = 0; j < static_cast<int>(presets.size()); ++j) {
-						if (presets[static_cast<std::size_t>(j)].name == s->motionByKind[idx]) {
-							mSel = j + 1;
-							break;
+				constexpr auto tblFlags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
+				if (ImGuiMCP::BeginTable("##fdng_pertype", 3, tblFlags, { 0, 0 }, 0.0f)) {
+					ImGuiMCP::TableSetupColumn("Damage type", 0, 0.30f, 0);
+					ImGuiMCP::TableSetupColumn("Motion", 0, 0.35f, 0);
+					ImGuiMCP::TableSetupColumn("Font", 0, 0.35f, 0);
+					ImGuiMCP::TableHeadersRow();
+					for (int i = 0; i < 9; ++i) {
+						const auto idx = static_cast<std::size_t>(i);
+						ImGuiMCP::TableNextRow(0, 0.0f);
+						ImGuiMCP::TableSetColumnIndex(0);
+						ImGuiMCP::Text("%s", kKindLabels[i]);
+
+						ImGuiMCP::TableSetColumnIndex(1);
+						ImGuiMCP::SetNextItemWidth(-1.0f);
+						int mSel = 0;
+						for (int j = 0; j < static_cast<int>(presets.size()); ++j) {
+							if (presets[static_cast<std::size_t>(j)].name == s->motionByKind[idx]) {
+								mSel = j + 1;
+								break;
+							}
+						}
+						const auto mId = std::format("##fdng_km{}", i);
+						if (SearchableCombo(mId.c_str(), &mSel, motionOpts)) {
+							s->motionByKind[idx] = mSel == 0 ? std::string{} : presets[static_cast<std::size_t>(mSel - 1)].name;
+						}
+
+						ImGuiMCP::TableSetColumnIndex(2);
+						ImGuiMCP::SetNextItemWidth(-1.0f);
+						int fSel = 0;
+						for (int j = 0; j < static_cast<int>(avail.size()); ++j) {
+							if (avail[static_cast<std::size_t>(j)].second == s->fontByKind[idx]) {
+								fSel = j + 1;
+								break;
+							}
+						}
+						const auto fId = std::format("##fdng_kf{}", i);
+						if (SearchableCombo(fId.c_str(), &fSel, fontOpts)) {
+							s->fontByKind[idx] = fSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fSel - 1)].second;
 						}
 					}
-					const auto mId = std::format("motion##fdng_km{}", i);
-					if (ImGuiMCP::Combo(mId.c_str(), &mSel, motionOpts.data(), static_cast<int>(motionOpts.size()), -1)) {
-						s->motionByKind[idx] = mSel == 0 ? std::string{} : presets[static_cast<std::size_t>(mSel - 1)].name;
-					}
-					int fSel = 0;
-					for (int j = 0; j < static_cast<int>(avail.size()); ++j) {
-						if (avail[static_cast<std::size_t>(j)].second == s->fontByKind[idx]) {
-							fSel = j + 1;
-							break;
-						}
-					}
-					const auto fId = std::format("font##fdng_kf{}", i);
-					if (ImGuiMCP::Combo(fId.c_str(), &fSel, fontOpts.data(), static_cast<int>(fontOpts.size()), -1)) {
-						s->fontByKind[idx] = fSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fSel - 1)].second;
-					}
-					ImGuiMCP::Separator();
+					ImGuiMCP::EndTable();
 				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Spawn origin", 0)) {
-				ImGuiMCP::SliderFloat("Offset up", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
+				ImGuiMCP::SliderFloat("Offset up (game units)", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
 				ImGuiMCP::SliderFloat("Offset toward you", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
 				ImGuiMCP::SliderFloat("Offset sideways", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
-				Tip("Shift where numbers spawn relative to the target's head, in a view-relative frame (game units).");
-				ImGuiMCP::Checkbox("Live preview", &s->previewMode);
-				Tip("Spawns sample numbers on your target so you can tune motion/offset/font live.");
-				if (s->previewMode) {
-					// Show what the preview is currently landing on (console
-					// selection via prid, else the player).
-					const char* target = "you (no target selected)";
-					if (const auto sel = RE::Console::GetSelectedRef()) {
-						if (const char* nm = sel->GetName(); nm && nm[0]) {
-							target = nm;
-						} else {
-							target = "selected reference";
-						}
-					}
-					ImGuiMCP::Text("Previewing on: %s", target);
-					ImGuiMCP::TextDisabled("Open the console and click an NPC (or 'prid <FormID>') to target it.");
-				}
+				Tip("Shift where numbers spawn relative to the target's head, in a view-relative frame (game units). Use Live preview at the top to see it.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Thresholds", 0)) {
@@ -424,6 +439,7 @@ namespace FDNG::UI
 				Tip("How a number shows whose fight it is. The number's own color always means the damage type; the marker uses the four 'Marker' colors below.");
 				ImGuiMCP::SliderFloat("Marker thickness", &s->styleThickness, 0.5f, 6.0f, "%.1f", 0);
 				DrawStylePreview(s);
+				ImGuiMCP::TextDisabled("Preview shows colors and marker style only (menu font, not your chosen game font).");
 				for (const auto& def : kColorTable) {
 					ColorRow(def.uiLabel, s->*def.field);
 				}
@@ -730,7 +746,7 @@ namespace FDNG::UI
 			logger::info("SKSE Menu Framework not installed; in-game config UI disabled.");
 			return;
 		}
-		SKSEMenuFramework::SetSection("FloatingDamageNG");
+		SKSEMenuFramework::SetSection("Floating Damage NG");
 		SKSEMenuFramework::AddSectionItem("Settings", RenderSettings);
 		SKSEMenuFramework::AddSectionItem("Combat Stats", RenderStats);
 		logger::info("Registered SMF pages (framework v{:.1f}).", SKSEMenuFramework::GetMenuFrameworkVersion());
