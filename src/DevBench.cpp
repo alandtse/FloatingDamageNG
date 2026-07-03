@@ -3,6 +3,8 @@
 
 #include "DevBench.h"
 
+#include "Export.h"
+
 #include "Settings.h"
 
 #include <DevBenchAPI.h>
@@ -13,58 +15,6 @@ namespace FDNG::DevBench
 	namespace
 	{
 		DevBenchAPI::IDevBenchInterface001* g_devbench = nullptr;
-
-		nlohmann::json RowsToJson(const std::vector<CombatLog::BreakdownRow>& a_rows)
-		{
-			auto rows = nlohmann::json::array();
-			for (const auto& r : a_rows) {
-				rows.push_back({
-					{ "name", r.name },
-					{ "total", r.total },
-					{ "mitigated", r.mitigated },
-					{ "hits", r.hits },
-					{ "crits", r.crits },
-				});
-			}
-			return rows;
-		}
-
-		nlohmann::json SummaryToJson(const CombatLog::SessionSummary& a_s)
-		{
-			auto combatants = nlohmann::json::array();
-			for (const auto& c : a_s.combatants) {
-				combatants.push_back({
-					{ "name", c.name },
-					{ "follower", c.isFollower },
-					{ "hostile", c.isHostileToPlayer },
-					{ "died", c.died },
-					{ "fled", c.fled },
-					{ "damageDealt", c.damageDealt },
-					{ "damageTaken", c.damageTaken },
-					{ "healingReceived", c.healingReceived },
-					{ "hits", c.hitsDealt },
-					{ "crits", c.critsDealt },
-					{ "timeToDie", c.timeToDie },
-					{ "bySource", RowsToJson(c.bySource) },
-					{ "byTarget", RowsToJson(c.byTarget) },
-					{ "takenByKind", RowsToJson(c.takenByKind) },
-					{ "killedBy", c.killedBy },
-					{ "deathRecap", c.deathRecap },
-				});
-			}
-			return {
-				{ "index", a_s.index },
-				{ "startedAt", a_s.startedAt },
-				{ "location", a_s.location },
-				{ "durationSeconds", a_s.duration },
-				{ "playerDamage", a_s.playerDamage },
-				{ "realDPS", a_s.realDPS },
-				{ "activeDPS", a_s.activeDPS },
-				{ "peakDPS", a_s.peakDPS },
-				{ "dpsSamples", a_s.dpsSamples },
-				{ "combatants", std::move(combatants) },
-			};
-		}
 
 		// Runs on devbench's listener thread — reads only FloatingDamageNG's
 		// own mutex-guarded copies, never game state, so no main-thread
@@ -91,7 +41,7 @@ namespace FDNG::DevBench
 			if (action == "sessions" || action == "summary") {
 				auto sessions = nlohmann::json::array();
 				for (const auto& s : CombatLog::GetSingleton()->GetHistory()) {
-					auto j = SummaryToJson(s);
+					auto j = Export::SessionToJson(s);
 					if (action == "summary") {
 						j.erase("dpsSamples");  // keep the summary compact
 						j.erase("combatants");
@@ -151,7 +101,7 @@ namespace FDNG::DevBench
 		if (!g_devbench) {
 			return;
 		}
-		auto payload = SummaryToJson(a_summary);
+		auto payload = Export::SessionToJson(a_summary);
 		payload.erase("dpsSamples");  // event stream stays light; fetch detail via the tool
 		g_devbench->EmitEvent("floatingdamage.sessionEnded", payload.dump().c_str());
 	}

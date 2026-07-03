@@ -112,6 +112,8 @@ namespace FDNG
 
 		enableCombatLog = ini.GetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
 		writeLogToDisk = ini.GetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
+		exportJsonl = ini.GetBoolValue("Analytics", "bExportJsonl", exportJsonl);
+		exportCsv = ini.GetBoolValue("Analytics", "bExportCsv", exportCsv);
 		enableLiveDPSWindow = ini.GetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
 		logFollowerPerformance = ini.GetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
 		postCombatWindowFadeSeconds = static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds));
@@ -191,6 +193,8 @@ namespace FDNG
 
 		ini.SetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
 		ini.SetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
+		ini.SetBoolValue("Analytics", "bExportJsonl", exportJsonl);
+		ini.SetBoolValue("Analytics", "bExportCsv", exportCsv);
 		ini.SetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
 		ini.SetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
 		ini.SetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds);

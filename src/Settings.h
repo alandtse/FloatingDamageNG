@@ -108,6 +108,8 @@ namespace FDNG
 		// [Analytics]
 		bool enableCombatLog{ true };       // master switch for the analytics module
 		bool writeLogToDisk{ true };        // append session reports to FloatingDamageNG-combat.log
+		bool exportJsonl{ false };          // append sessions to FloatingDamageNG-sessions.jsonl (one JSON object/line)
+		bool exportCsv{ false };            // append per-combatant rows to FloatingDamageNG-combatants.csv
 		bool enableLiveDPSWindow{ false };  // opt-in: an uninvited second HUD element surprises users
 		bool logFollowerPerformance{ true };
 		float postCombatWindowFadeSeconds{ 5.0f };

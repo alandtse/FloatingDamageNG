@@ -228,6 +228,10 @@ namespace FDNG::UI
 				ImGuiMCP::BeginDisabled(!s->enableCombatLog);
 				ImGuiMCP::Checkbox("Write sessions to disk", &s->writeLogToDisk);
 				Tip("Appends session reports to FloatingDamageNG-combat.log next to your SKSE logs (rotated at 5 MB).");
+				ImGuiMCP::Checkbox("Export JSONL", &s->exportJsonl);
+				Tip("One JSON object per session to FloatingDamageNG-sessions.jsonl — for pandas/jq/dashboards. Full drill-down data included.");
+				ImGuiMCP::Checkbox("Export CSV", &s->exportCsv);
+				Tip("One row per combatant per session to FloatingDamageNG-combatants.csv — for Excel/Sheets.");
 				ImGuiMCP::Checkbox("Live DPS readout", &s->enableLiveDPSWindow);
 				Tip("Small combat overlay: top-right on flat, head-locked HUD plane in VR.");
 				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);

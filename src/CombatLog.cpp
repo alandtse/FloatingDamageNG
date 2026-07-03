@@ -4,6 +4,7 @@
 #include "CombatLog.h"
 
 #include "DevBench.h"
+#include "Export.h"
 #include "Settings.h"
 
 #include <fstream>
@@ -435,6 +436,7 @@ namespace FDNG
 		if (settings->writeLogToDisk) {
 			WriteDiskReport(summary);
 		}
+		Export::WriteSession(summary);
 
 		DevBench::NotifySessionEnded(summary);
 
@@ -446,17 +448,8 @@ namespace FDNG
 
 	void CombatLog::WriteDiskReport(const SessionSummary& a_summary)
 	{
-		// Rotate once past the cap so a long-running install never grows
-		// an unbounded file; one .old generation is kept.
-		constexpr std::uintmax_t kMaxLogBytes = 5ull * 1024 * 1024;
 		const auto path = LogPath();
-		std::error_code ec;
-		if (std::filesystem::file_size(path, ec) > kMaxLogBytes && !ec) {
-			auto old = path;
-			old += ".old";
-			std::filesystem::remove(old, ec);
-			std::filesystem::rename(path, old, ec);
-		}
+		Export::RotateIfOversized(path);
 
 		std::ofstream out(path, std::ios::app);
 		if (!out) {
