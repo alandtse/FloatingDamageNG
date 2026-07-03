@@ -29,7 +29,7 @@ on:
       mod_filename:
         description: "Nexus file name (without extension)."
         required: false
-        default: "FloatingDamageNG"
+        default: "Floating Damage NG"
       dry_run:
         description: "If true, only report the planned upload; never upload."
         required: false
@@ -55,7 +55,7 @@ on:
       mod_filename:
         required: false
         type: string
-        default: "FloatingDamageNG"
+        default: "Floating Damage NG"
       dry_run:
         required: false
         type: string
@@ -150,7 +150,7 @@ jobs:
           MOD_ID: ${{ needs.prepare.outputs.mod_id }}
           VERSION: ${{ needs.prepare.outputs.version }}
           NEXUS_GAME_ID: ${{ inputs.nexus_game_id || 'skyrimspecialedition' }}
-          MOD_FILENAME: ${{ inputs.mod_filename || 'FloatingDamageNG' }}
+          MOD_FILENAME: ${{ inputs.mod_filename || 'Floating Damage NG' }}
           UNEX_APIKEY: ${{ secrets.UNEX_APIKEY }}
         run: |
           python3 << 'PYEOF'
@@ -160,7 +160,7 @@ jobs:
           version = os.environ.get('VERSION', '')
           game_id = os.environ.get('NEXUS_GAME_ID', 'skyrimspecialedition')
           api_key = os.environ.get('UNEX_APIKEY', '')
-          label = os.environ.get('MOD_FILENAME', 'FloatingDamageNG')
+          label = os.environ.get('MOD_FILENAME', 'Floating Damage NG')
           summary = open(os.environ['GITHUB_STEP_SUMMARY'], 'a')
 
           def w(line=''):
@@ -226,7 +226,7 @@ jobs:
       nexus_mod_id: ${{ needs.prepare.outputs.mod_id }}
       tag_name: ${{ needs.prepare.outputs.tag }}
       mod_version: ${{ needs.prepare.outputs.version }}
-      mod_filename: ${{ inputs.mod_filename || 'FloatingDamageNG' }}
+      mod_filename: ${{ inputs.mod_filename || 'Floating Damage NG' }}
       changelog: ${{ needs.prepare.outputs.changelog }}
       file_description: "See Description → Requirements for installation instructions. PDB is for crash debugging and can be removed."
       check_existing: true
