@@ -109,7 +109,7 @@ namespace FDNG::Fonts
 						continue;
 					}
 					auto ext = it->path().extension().string();
-					std::ranges::transform(ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(c)); });
+					std::ranges::transform(ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(static_cast<unsigned char>(c))); });
 					if (ext == ".ttf" || ext == ".otf") {
 						g_available.emplace_back(it->path().stem().string(), it->path().string());
 					}

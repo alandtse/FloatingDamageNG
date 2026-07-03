@@ -52,12 +52,14 @@ namespace FDNG::Presets
 			};
 			Effect e;
 			e.name = json.contains("name") && json["name"].is_string() ? json["name"].get<std::string>() : a_path.stem().string();
-			e.motion.riseSpeed = num("riseSpeed", 45.0f);
-			e.motion.riseAccel = num("riseAccel", 0.0f);
-			e.motion.lateralSpeed = num("lateralSpeed", 0.0f);
+			// Clamp to the same ranges the sliders allow, so a hand-edited or
+			// shared preset can't push the integrator to extremes.
+			e.motion.riseSpeed = std::clamp(num("riseSpeed", 45.0f), -50.0f, 200.0f);
+			e.motion.riseAccel = std::clamp(num("riseAccel", 0.0f), -400.0f, 200.0f);
+			e.motion.lateralSpeed = std::clamp(num("lateralSpeed", 0.0f), 0.0f, 250.0f);
 			e.motion.lateralDamping = std::clamp(num("lateralDamping", 0.0f), 0.0f, 20.0f);
 			e.spread = static_cast<SpreadPattern>(std::clamp(static_cast<int>(num("spreadPattern", 0.0f)), 0, 2));
-			e.spawnAngleDeg = num("spawnAngle", 0.0f);
+			e.spawnAngleDeg = std::clamp(num("spawnAngle", 0.0f), 0.0f, 360.0f);
 			return e;
 		}
 
@@ -124,6 +126,15 @@ namespace FDNG::Presets
 		const auto file = SanitizeFileName(a_effect.name);
 		if (file.empty()) {
 			return false;
+		}
+		// A built-in of the same name always wins in ByName() (built-ins are
+		// listed first), so the saved file would be unreachable by name - and
+		// per-kind overrides resolve by name. Refuse the collision.
+		for (const auto& b : kEffectPresets) {
+			if (a_effect.name == b.name) {
+				logger::warn("Preset name '{}' collides with a built-in; not saved.", a_effect.name);
+				return false;
+			}
 		}
 		std::error_code ec;
 		std::filesystem::create_directories(kPresetDir, ec);

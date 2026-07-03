@@ -21,14 +21,17 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdint>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -245,9 +248,13 @@ namespace FDNG::UI
 				a_settings->Load();
 			}
 			// Reset is destructive and sits next to Save/Reload, so gate it
-			// behind a second click.
+			// behind a second click. Clear a pending confirm when the page is
+			// reopened, so it can't fire on a stale click from last time.
 			ImGuiMCP::SameLine(0.0f, -1.0f);
 			static bool s_confirmReset = false;
+			if (ImGuiMCP::IsWindowAppearing()) {
+				s_confirmReset = false;
+			}
 			if (!s_confirmReset) {
 				if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
 					s_confirmReset = true;
@@ -422,7 +429,7 @@ namespace FDNG::UI
 						saveMsg = std::format("Saved '{}'.", presetName);
 						presetName[0] = '\0';
 					} else {
-						saveMsg = "Save failed - check the name (letters/numbers/space) and folder permissions.";
+						saveMsg = "Save failed - use a unique name (letters, numbers, spaces, - or _; not a built-in).";
 					}
 				}
 				ImGuiMCP::SameLine(0.0f, -1.0f);

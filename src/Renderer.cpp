@@ -328,7 +328,10 @@ namespace FDNG::Renderer
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
 				const float fontPx = BaseFontPx() * rn.scale;
 				const auto metrics = ComputeStyleMetrics(settings->originStyle, settings->styleThickness);
-				const ImVec2 estimate = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
+				// Measure with the SAME font the drawer uses (per-kind override
+				// or default) so the reserved quad matches the drawn glyphs.
+				ImFont* qFont = Fonts::ForKind(rn.number->kind);
+				const ImVec2 estimate = qFont->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
 				// The subtext can be wider than the main text; reserve for it (at
 				// the SAME dynamic ratio the drawer uses) or neighboring quads
 				// sample each other's pixels.
@@ -336,7 +339,7 @@ namespace FDNG::Renderer
 				float blockH = estimate.y;
 				if (rn.number->subtext[0] != '\0') {
 					const float subPx = fontPx * SubtextRatio(rn.number->amount, rn.number->mitigated);
-					const ImVec2 subEstimate = ImGui::GetFont()->CalcTextSizeA(subPx, FLT_MAX, 0.0f, rn.number->subtext);
+					const ImVec2 subEstimate = qFont->CalcTextSizeA(subPx, FLT_MAX, 0.0f, rn.number->subtext);
 					blockW = std::max(blockW, subEstimate.x);
 					blockH += subEstimate.y;
 				}
@@ -451,7 +454,8 @@ namespace FDNG::Renderer
 					fontPx = BaseFontPx() * rn.scale * perspective;
 				}
 
-				const ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
+				// Center using the same font the drawer picks per kind.
+				const ImVec2 sz = Fonts::ForKind(rn.number->kind)->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
 				DrawNumberBlock(drawList, rn, ImVec2(screenPos.x - sz.x * 0.5f, screenPos.y - sz.y), fontPx);
 			}
 
