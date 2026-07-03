@@ -12,16 +12,17 @@ world-anchored 3D numbers in VR and a built-in combat analytics log.
   physical (crimson), fire, frost, shock, poison, untyped magic, plus healing
   (green `+N`). An enchanted-weapon swing shows two numbers — the physical hit
   and the enchantment payload — because the engine applies them separately and
-  so do we.
-- **Crit / sneak / block** styling from the engine's real hit flags, and a
-  mitigation subtext that says what actually happened: `104 (-45 armor)`,
-  `(-30 blocked)`, or `(-20 resisted)` — sized by how much of the hit was
-  mitigated. A fully immune target shows **RESISTED** in the element's color
-  instead of nothing.
-- **HEADSHOT** tags on projectile hits, read from the engine's impact skeleton
-  node — works in vanilla, and stays accurate under locational-damage mods
-  (whose multipliers are already reflected in the number; an implied `x2.5`
-  shows when a hit exceeds its normal baseline).
+  so do we. Frost and shock also apply their stamina/magicka bleed, which can
+  display too (off by default).
+- **Crit / sneak / bash / block** styling from the engine's real hit flags,
+  and a mitigation subtext that says what actually happened: `104 (-45
+armor)`, `(-30 blocked)` with the true blocked amount, or `(-20 resisted)` —
+  sized by how much of the hit was mitigated.
+- **HEADSHOT** tags on bow and crossbow hits, resolved from the engine's hit
+  position against the victim's skeleton — works in vanilla, and stays
+  accurate under locational-damage mods (whose multipliers are already
+  reflected in the number; an implied `x2.5` shows when a hit exceeds its
+  normal baseline).
 - Numbers follow their target while loaded — a fleeing enemy under Flames
   carries its counting-up burn total with it; your self-heal rides along as
   you move. Damage-over-time ticks pool into one live-updating number instead
@@ -30,15 +31,21 @@ world-anchored 3D numbers in VR and a built-in combat analytics log.
   to a configurable screen spot in first person (flat), anchored ~1 m ahead at
   chest height in VR.
 - Three motion profiles: Float, Arc (parabolic), Radial burst. Big hits render
-  bigger (log-scaled by damage). Crowd readability for large fights: the
-  outline color says whose fight it is (your hits black, damage you take red,
-  follower damage blue, bystander fights gray), with follower and NPC-vs-NPC
-  numbers sized down and distance-culled.
+  bigger (log-scaled by damage). **Whose fight it is** reads from a selectable
+  origin marker — colored text outline, underline, or box (your hits black,
+  damage you take red, follower damage blue, bystander fights gray; all
+  themable, with a live preview in the menu) — and follower/NPC-vs-NPC numbers
+  render smaller and distance-culled.
 - **Combat analytics** (optional): each fight is logged as a session — per
   combatant damage dealt/taken, healing, crits, time-to-die, who fled — with
-  real and active DPS. A small live DPS readout shows during combat (flat),
-  and an in-game stats browser with DPS graphs is available via SKSE Menu
-  Framework. Sessions append to a plain-text log you can read outside the game.
+  real, active, and peak DPS. Per-combatant drill-downs show damage **by
+  weapon/spell** and **by target** as kind-colored meter bars, a **resist
+  profile** (how much of each element that enemy shrugged off), and a **death
+  recap** — who landed the killing blow and the hits leading up to it. The
+  stats browser (SKSE Menu Framework) has DPS graphs, click-to-sort tables,
+  and a name filter; a live DPS readout shows during combat (top-right on
+  flat, head-locked HUD plane in VR). Sessions append to a plain-text log, and
+  opt-in **JSONL/CSV exports** feed pandas/jq/Excel.
 
 ## VR
 
@@ -57,18 +64,18 @@ data is obtained and how the text is rendered. (Floating Damage details are
 from reading its published v0.4 source; Modern Floating Damage from its public
 description.)
 
-|                      | **FloatingDamageNG**                                                                      | [Floating Damage](https://www.nexusmods.com/skyrimspecialedition/mods/14332)                           | [Modern Floating Damage](https://www.nexusmods.com/skyrimspecialedition/mods/170076)           |
-| -------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| Runtimes             | SE + AE + VR, one DLL                                                                     | SE/AE                                                                                                  | SE/AE                                                                                          |
-| VR                   | World-anchored 3D billboards                                                              | No (long-requested)                                                                                    | No (renderer is flat-screen)                                                                   |
-| Damage data          | Engine damage + magic-effect pipeline hooks: true per-application amounts, source, caster | Polls Health/Magicka/Stamina deltas per frame; must estimate and subtract regen; no damage source info | Hooks the damage pipeline; splits physical vs enchant with per-source colors                   |
-| Component splitting  | Yes (physical + each effect separately)                                                   | No (net stat change only)                                                                              | Yes                                                                                            |
-| Mitigation breakdown | armor / blocked / resisted amounts, from live `HitData` + resist values                   | No                                                                                                     | Not advertised                                                                                 |
-| Hit location         | HEADSHOT etc. from engine impact nodes, regex-configurable                                | No                                                                                                     | Not advertised                                                                                 |
-| Renderer             | Dear ImGui, TTF fonts (D3D11; VR via ImGuiVRHelper)                                       | Scaleform SWF (Flash)                                                                                  | [PrismaUI](https://www.nexusmods.com/skyrimspecialedition/mods/170076) (embedded web/CEF view) |
-| Combat analytics     | Sessions, DPS (real/active), TTD, fled, disk log, in-game graphs, optional MCP/REST       | No                                                                                                     | No                                                                                             |
-| Extra dependencies   | None required on flat; ImGuiVRHelper for VR                                               | None                                                                                                   | PrismaUI                                                                                       |
-| Source code          | Open (GPL-3.0 + modding exception, this repo)                                             | Only an early version (v0.4) was ever published; the author is no longer active                        | Closed                                                                                         |
+|                      | **FloatingDamageNG**                                                                           | [Floating Damage](https://www.nexusmods.com/skyrimspecialedition/mods/14332)                           | [Modern Floating Damage](https://www.nexusmods.com/skyrimspecialedition/mods/170076)           |
+| -------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| Runtimes             | SE + AE + VR, one DLL                                                                          | SE/AE                                                                                                  | SE/AE                                                                                          |
+| VR                   | World-anchored 3D billboards                                                                   | No (long-requested)                                                                                    | No (renderer is flat-screen)                                                                   |
+| Damage data          | Engine damage + magic-effect pipeline hooks: true per-application amounts, source, caster      | Polls Health/Magicka/Stamina deltas per frame; must estimate and subtract regen; no damage source info | Hooks the damage pipeline; splits physical vs enchant with per-source colors                   |
+| Component splitting  | Yes (physical + each effect separately)                                                        | No (net stat change only)                                                                              | Yes                                                                                            |
+| Mitigation breakdown | armor / blocked / resisted amounts, from live `HitData` + resist values                        | No                                                                                                     | Not advertised                                                                                 |
+| Hit location         | HEADSHOT etc. from engine impact nodes, regex-configurable                                     | No                                                                                                     | Not advertised                                                                                 |
+| Renderer             | Dear ImGui, TTF fonts (D3D11; VR via ImGuiVRHelper)                                            | Scaleform SWF (Flash)                                                                                  | [PrismaUI](https://www.nexusmods.com/skyrimspecialedition/mods/170076) (embedded web/CEF view) |
+| Combat analytics     | Sessions, DPS, drill-downs, resist profiles, death recaps, JSONL/CSV export, optional MCP/REST | No                                                                                                     | No                                                                                             |
+| Extra dependencies   | None required on flat; ImGuiVRHelper for VR                                                    | None                                                                                                   | PrismaUI                                                                                       |
+| Source code          | Open (GPL-3.0 + modding exception, this repo)                                                  | Only an early version (v0.4) was ever published; the author is no longer active                        | Closed                                                                                         |
 
 If you play flat-screen only and want the web-styled visuals, Modern Floating
 Damage is a good mod — the honest difference there is renderer taste
@@ -96,11 +103,14 @@ and the project can be forked if it is ever abandoned.
 
 ## Configuration
 
-`Data/SKSE/Plugins/FloatingDamageNG.ini` — every filter, color, threshold, and
-motion setting, with comments. With SKSE Menu Framework installed the same
-settings are editable in-game with live preview and saved back to the INI.
-Combat session reports append to `FloatingDamageNG-combat.log` next to your
-SKSE logs.
+`Data/SKSE/Plugins/FloatingDamageNG.ini` — every filter, color, style,
+threshold, and motion setting, with comments. With SKSE Menu Framework
+installed the same settings are editable in-game with a live style preview and
+saved back to the INI. Combat session reports append to
+`FloatingDamageNG-combat.log` next to your SKSE logs; optional structured
+exports write `FloatingDamageNG-sessions.jsonl` (one JSON object per session,
+full drill-down data) and `FloatingDamageNG-combatants.csv` (one row per
+combatant, spreadsheet-ready). All three rotate at 5 MB.
 
 ## Building
 

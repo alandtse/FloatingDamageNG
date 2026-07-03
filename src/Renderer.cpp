@@ -571,7 +571,11 @@ namespace FDNG::Renderer
 		// readout): the world-quad client's panel is consumed as a quad
 		// atlas, so anything meant for a vanilla-HUD-style plane needs its
 		// own kClientFlag_HUDMode panel.
-		if (!g_vrHudClient.Connect("FloatingDamageNG-HUD", FDNG_VERSION_STRING, ImGuiVRHelperPluginAPI::kClientFlag_HUDMode)) {
+		if (g_vrHudClient.Connect("FloatingDamageNG-HUD", FDNG_VERSION_STRING, ImGuiVRHelperPluginAPI::kClientFlag_HUDMode)) {
+			// Each client owns a private HUD context; without the callback the
+			// readout would rasterize in ImGui's 13 px embedded font.
+			g_vrHudClient.SetHudStyleCallback([]() { Fonts::Load(); });
+		} else {
 			logger::warn("HUD-mode client registration failed — live DPS readout unavailable in VR.");
 		}
 	}

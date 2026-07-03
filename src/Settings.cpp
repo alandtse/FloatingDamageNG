@@ -116,7 +116,7 @@ namespace FDNG
 		exportCsv = ini.GetBoolValue("Analytics", "bExportCsv", exportCsv);
 		enableLiveDPSWindow = ini.GetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
 		logFollowerPerformance = ini.GetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
-		postCombatWindowFadeSeconds = static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds));
+		postCombatWindowFadeSeconds = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds)), 0.5f, 30.0f);
 		enableDevBench = ini.GetBoolValue("Analytics", "bEnableDevBench", enableDevBench);
 
 		debugLog = ini.GetBoolValue("Debug", "bDebugLog", debugLog);

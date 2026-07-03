@@ -255,7 +255,7 @@ namespace FDNG
 		const auto id = a_event->actorDying->GetFormID();
 		std::scoped_lock lk{ _deathLock };
 		if (_deathCount < _deaths.size()) {
-			_deaths[_deathCount++] = id;
+			_deaths[_deathCount++] = { id, Clock::now() };
 		}
 		return RE::BSEventNotifyControl::kContinue;
 	}
@@ -279,8 +279,9 @@ namespace FDNG
 		}
 		_lastTickCheck = now;
 
-		// Drain deaths recorded by the sink (up to ~1 s late; TTD tolerance).
-		std::array<RE::FormID, 32> deaths{};
+		// Drain deaths recorded by the sink (up to ~1 s late; the sink's
+		// timestamp keeps recap/TTD accurate regardless).
+		std::array<PendingDeath, 32> deaths{};
 		std::size_t deathCount = 0;
 		{
 			std::scoped_lock lk{ _deathLock };
@@ -299,9 +300,9 @@ namespace FDNG
 		}
 
 		for (std::size_t i = 0; i < deathCount; ++i) {
-			if (const auto it = _combatants.find(deaths[i]); it != _combatants.end()) {
-				it->second.diedAt = SessionSeconds();
-				BuildDeathRecap(deaths[i], it->second);
+			if (const auto it = _combatants.find(deaths[i].id); it != _combatants.end()) {
+				it->second.diedAt = std::chrono::duration<float>(deaths[i].at - _sessionStart).count();
+				BuildDeathRecap(deaths[i].id, it->second);
 			}
 		}
 
@@ -322,10 +323,12 @@ namespace FDNG
 	void CombatLog::BuildDeathRecap(RE::FormID a_victimID, Combatant& a_combatant)
 	{
 		// _lock held (Tick). Walk the recent-damage ring for the fatal window;
-		// the last matching event is the killing blow.
+		// the last matching event is the killing blow. Events after the
+		// sink-stamped death time are overkill ticks on the corpse — they
+		// must not steal killing-blow credit.
 		const float diedAt = a_combatant.diedAt;
 		for (const auto& ev : _recentDamage) {
-			if (ev.victimID != a_victimID || diedAt - ev.sessionTime > kRecapWindowSeconds) {
+			if (ev.victimID != a_victimID || diedAt - ev.sessionTime > kRecapWindowSeconds || ev.sessionTime > diedAt + 0.1f) {
 				continue;
 			}
 			a_combatant.killedByID = ev.attackerID;

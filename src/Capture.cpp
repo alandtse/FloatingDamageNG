@@ -508,13 +508,14 @@ namespace FDNG
 		// sprinting, and power attacks arrive as identical deltas.
 		DamageKind ignored = DamageKind::kMagic;
 		RE::Actor* attacker = nullptr;
-		FindRecentMagic(a_raw.victimID, ignored, attacker);
+		RE::FormID mgefID = 0;
+		FindRecentMagic(a_raw.victimID, ignored, attacker, &mgefID);
 		if (!attacker || attacker == a_victim) {
 			return;
 		}
 
 		const auto kind = a_raw.av == RE::ActorValue::kMagicka ? DamageKind::kMagickaDrain : DamageKind::kStaminaDrain;
-		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind);
+		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind, 0.0f, mgefID);
 	}
 
 	void Capture::ProcessRestore(RE::Actor* a_target, float a_amount, RE::Actor* a_healer)

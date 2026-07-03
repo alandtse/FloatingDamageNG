@@ -14,12 +14,14 @@ namespace FDNG
 	// reports append to <SKSE logs>/FloatingDamageNG-combat.log and feed the
 	// live DPS readout.
 	//
-	// THREADING: the event sinks run on engine threads and only stash POD;
-	// everything else runs on the main thread (RecordDamage/RecordHeal are
-	// called from Capture::ProcessQueued, Tick from the render hook). Engine
-	// functions are never called while _lock is held — a sink thread waiting
-	// on _lock can hold engine locks, and taking them in the opposite order
-	// from under _lock deadlocks the game.
+	// THREADING: the event sinks run on engine threads and only stash POD —
+	// they never take _lock, which is what makes _lock safe: with no engine
+	// thread ever waiting on it, main-thread code under _lock may freely
+	// call engine functions (name lookups etc.) without a lock-order
+	// inversion. Everything except the sinks runs on the main thread
+	// (RecordDamage/RecordHeal from Capture::ProcessQueued, Tick from the
+	// render hook); the only other _lock contenders are read-only snapshot
+	// getters from UI/devbench threads.
 	class CombatLog :
 		public RE::BSTEventSink<RE::TESCombatEvent>,
 		public RE::BSTEventSink<RE::TESDeathEvent>
@@ -191,10 +193,18 @@ namespace FDNG
 		Clock::time_point _lastTickCheck{};
 		Clock::time_point _lastDamageAt{};
 
-		// Sink→main-thread handoff (POD only; sinks never take _lock).
+		// Sink→main-thread handoff (POD only; sinks never take _lock). The
+		// death timestamp is taken in the sink: the drain runs up to 1 s
+		// later, and overkill ticks recorded in between must not steal
+		// killing-blow credit.
+		struct PendingDeath
+		{
+			RE::FormID id{ 0 };
+			Clock::time_point at{};
+		};
 		std::atomic<RE::FormID> _combatHint{ 0 };
 		std::mutex _deathLock;
-		std::array<RE::FormID, 32> _deaths{};
+		std::array<PendingDeath, 32> _deaths{};
 		std::size_t _deathCount{ 0 };
 
 		// Recent damage ring for death recaps (main thread, under _lock).

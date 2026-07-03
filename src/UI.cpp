@@ -4,7 +4,7 @@
 // Optional in-game config + combat-stats UI, hosted by SKSE Menu Framework 3.
 // SMF resolves everything through GetProcAddress at call time, so this whole
 // module is inert when the framework DLL isn't installed. Widgets draw through
-// the ImGuiMCP indirection table (the HOST's ImGui context) — never through
+// the ImGuiMCP indirection table (the HOST's ImGui context) - never through
 // our own statically-linked ImGui.
 
 // This TU is built WITHOUT the project PCH (see xmake.lua): the SMF header's
@@ -58,7 +58,7 @@ namespace FDNG::UI
 		}
 
 		// devbench writes the port it bound to runtime.json on startup; we read
-		// it for display only (the integration itself is in-process). Cached —
+		// it for display only (the integration itself is in-process). Cached -
 		// file I/O every frame would hitch while the panel is open.
 		int ReadDevBenchPort()
 		{
@@ -103,7 +103,7 @@ namespace FDNG::UI
 			return (static_cast<std::uint32_t>(a_alpha) << 24) | ((a_rgb & 0xFF) << 16) | (a_rgb & 0x00FF00) | ((a_rgb >> 16) & 0xFF);
 		}
 
-		// Live sample of the current style, drawn with the menu font — same
+		// Live sample of the current style, drawn with the menu font - same
 		// outline/underline/box logic as the in-world renderer.
 		void DrawStylePreview(const Settings* s)
 		{
@@ -229,9 +229,9 @@ namespace FDNG::UI
 				ImGuiMCP::Checkbox("Write sessions to disk", &s->writeLogToDisk);
 				Tip("Appends session reports to FloatingDamageNG-combat.log next to your SKSE logs (rotated at 5 MB).");
 				ImGuiMCP::Checkbox("Export JSONL", &s->exportJsonl);
-				Tip("One JSON object per session to FloatingDamageNG-sessions.jsonl — for pandas/jq/dashboards. Full drill-down data included.");
+				Tip("One JSON object per session to FloatingDamageNG-sessions.jsonl - for pandas/jq/dashboards. Full drill-down data included.");
 				ImGuiMCP::Checkbox("Export CSV", &s->exportCsv);
-				Tip("One row per combatant per session to FloatingDamageNG-combatants.csv — for Excel/Sheets.");
+				Tip("One row per combatant per session to FloatingDamageNG-combatants.csv - for Excel/Sheets.");
 				ImGuiMCP::Checkbox("Live DPS readout", &s->enableLiveDPSWindow);
 				Tip("Small combat overlay: top-right on flat, head-locked HUD plane in VR.");
 				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);
@@ -248,7 +248,7 @@ namespace FDNG::UI
 						}
 						ImGuiMCP::TextDisabled("Tool: floatingdamage.stats (MCP + REST); event: floatingdamage.sessionEnded");
 					} else {
-						ImGuiMCP::TextDisabled("devbench host not detected — install the devbench SKSE plugin.");
+						ImGuiMCP::TextDisabled("devbench host not detected - install the devbench SKSE plugin.");
 					}
 				}
 				ImGuiMCP::EndDisabled();
@@ -338,7 +338,11 @@ namespace FDNG::UI
 						}
 					};
 					if (spec.ColumnUserID == 0) {
-						return asc ? a->name < b->name : b->name < a->name;
+						const auto iless = [](const std::string& x, const std::string& y) {
+							return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end(),
+								[](char l, char r) { return std::tolower(static_cast<unsigned char>(l)) < std::tolower(static_cast<unsigned char>(r)); });
+						};
+						return asc ? iless(a->name, b->name) : iless(b->name, a->name);
 					}
 					return asc ? key(*a) < key(*b) : key(*b) < key(*a);
 				});
@@ -376,7 +380,7 @@ namespace FDNG::UI
 		}
 
 		// Details!-style meter list: each row is a kind-colored share bar
-		// with the label on it — proportion and damage type read at a glance,
+		// with the label on it - proportion and damage type read at a glance,
 		// no charting library needed.
 		void DrawMeterBars(const std::vector<CombatLog::BreakdownRow>& a_rows, bool a_kindColored, bool a_showMitigated)
 		{
@@ -425,6 +429,9 @@ namespace FDNG::UI
 				return;
 			}
 			static std::unordered_map<int, int> s_selected;  // session index -> combatant index
+			if (s_selected.size() > 64) {
+				s_selected.clear();  // stale sessions; selection reset is harmless
+			}
 			int& sel = s_selected[a_session.index];
 			sel = std::clamp(sel, 0, static_cast<int>(a_session.combatants.size()) - 1);
 
@@ -461,7 +468,7 @@ namespace FDNG::UI
 				ImGuiMCP::Text("In combat: %.1fs | %.0f dmg | DPS %.1f real / %.1f active",
 					live.sessionSeconds, live.playerDamage, live.realDPS, live.activeDPS);
 			} else if (!Settings::GetSingleton()->enableCombatLog) {
-				ImGuiMCP::TextDisabled("Combat log is disabled — enable it in Settings > Analytics.");
+				ImGuiMCP::TextDisabled("Combat log is disabled - enable it in Settings > Analytics.");
 			} else {
 				ImGuiMCP::TextDisabled("Not in combat.");
 			}
@@ -479,7 +486,7 @@ namespace FDNG::UI
 			// Newest first.
 			for (auto it = history.rbegin(); it != history.rend(); ++it) {
 				const auto& s = *it;
-				const auto header = std::format("#{} — {} @ {} — {:.1f}s, {:.0f} dmg###fdng_session{}",
+				const auto header = std::format("#{} - {} @ {} - {:.1f}s, {:.0f} dmg###fdng_session{}",
 					s.index, s.startedAt, s.location, s.duration, s.playerDamage, s.index);
 				if (!ImGuiMCP::CollapsingHeader(header.c_str(), 0)) {
 					continue;
