@@ -36,6 +36,7 @@ namespace logger = SKSE::log;
 
 #include "CombatLog.h"
 #include "DevBench.h"
+#include "Presets.h"
 #include "Settings.h"
 #include "StyleMetrics.h"
 #include "UI.h"
@@ -197,17 +198,26 @@ namespace FDNG::UI
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Motion effect", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
-				// A preset just copies its bundle into the live fields; tune from there.
-				int preset = s->motionPreset;
-				const char* presetNames[] = { "Float", "Arc", "Radial", "Fireworks" };
-				if (ImGuiMCP::Combo("Preset", &preset, presetNames, 4, -1)) {
-					s->motionPreset = preset;
-					const auto& p = kEffectPresets[static_cast<std::size_t>(preset)];
+				// A preset (built-in or a shared JSON file) copies its bundle
+				// into the live fields; tune from there.
+				const auto& presets = Presets::All();
+				std::vector<const char*> names;
+				names.reserve(presets.size());
+				for (const auto& p : presets) {
+					names.push_back(p.name.c_str());
+				}
+				static int preset = 0;
+				preset = std::clamp(preset, 0, static_cast<int>(presets.size()) - 1);
+				if (ImGuiMCP::Combo("Preset", &preset, names.data(), static_cast<int>(names.size()), -1)) {
+					const auto& p = presets[static_cast<std::size_t>(preset)];
 					s->motion = p.motion;
 					s->spreadPattern = p.spread;
 					s->spawnAngleDeg = p.spawnAngleDeg;
+					if (p.builtIn) {
+						s->motionPreset = preset;
+					}
 				}
-				Tip("A starting point. Editing any slider below customizes it; the built-ins are defined the same way.");
+				Tip("A starting point (built-ins plus any JSON files in Data/SKSE/Plugins/FloatingDamageNG/Presets). Editing a slider customizes it; built-ins are defined the same way.");
 				ImGuiMCP::SliderFloat("Rise speed", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
 				Tip("Upward velocity. Negative sinks.");
 				ImGuiMCP::SliderFloat("Rise accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
@@ -239,6 +249,21 @@ namespace FDNG::UI
 				}
 				ImGuiMCP::SliderFloat("Speed", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
 				ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
+
+				// Save the current path as a shareable JSON preset file.
+				ImGuiMCP::Separator();
+				static char presetName[48]{};
+				ImGuiMCP::InputTextWithHint("##fdng_preset_name", "Preset name to save...", presetName, sizeof(presetName), 0, nullptr, nullptr);
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Save preset", { 0, 0 }) && presetName[0]) {
+					Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg });
+					presetName[0] = '\0';
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Reload presets", { 0, 0 })) {
+					Presets::Reload();
+				}
+				ImGuiMCP::TextDisabled("Saved to Data/SKSE/Plugins/FloatingDamageNG/Presets - share the .json to trade effects.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Spawn origin", 0)) {
