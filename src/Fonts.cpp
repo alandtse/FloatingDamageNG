@@ -5,6 +5,8 @@
 
 #include "Settings.h"
 
+#include <cctype>
+
 namespace FDNG::Fonts
 {
 	namespace
@@ -44,5 +46,36 @@ namespace FDNG::Fonts
 			}
 		}
 		logger::warn("No TTF font found; falling back to the embedded bitmap font (numbers will look pixelated).");
+	}
+
+	const std::vector<std::pair<std::string, std::string>>& Available()
+	{
+		static std::vector<std::pair<std::string, std::string>> fonts = [] {
+			std::vector<std::pair<std::string, std::string>> out;
+			const auto scan = [&](const std::filesystem::path& a_dir) {
+				std::error_code ec;
+				if (!std::filesystem::is_directory(a_dir, ec)) {
+					return;
+				}
+				for (const auto& e : std::filesystem::directory_iterator(a_dir, ec)) {
+					if (ec || !e.is_regular_file()) {
+						continue;
+					}
+					auto ext = e.path().extension().string();
+					std::ranges::transform(ext, ext.begin(), [](char c) { return static_cast<char>(std::tolower(c)); });
+					if (ext == ".ttf" || ext == ".otf") {
+						out.emplace_back(e.path().stem().string(), e.path().string());
+					}
+				}
+			};
+			scan("Data/Interface/FloatingDamageNG");
+			char windir[MAX_PATH]{};
+			if (GetEnvironmentVariableA("WINDIR", windir, MAX_PATH) > 0) {
+				scan(std::filesystem::path(windir) / "Fonts");
+			}
+			std::ranges::sort(out, [](const auto& a, const auto& b) { return a.first < b.first; });
+			return out;
+		}();
+		return fonts;
 	}
 }

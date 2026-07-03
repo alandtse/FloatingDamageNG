@@ -36,6 +36,7 @@ namespace logger = SKSE::log;
 
 #include "CombatLog.h"
 #include "DevBench.h"
+#include "Fonts.h"
 #include "Presets.h"
 #include "Settings.h"
 #include "StyleMetrics.h"
@@ -187,6 +188,24 @@ namespace FDNG::UI
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Size", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				// Font choice: "(auto)" plus every TTF/OTF found in the mod's
+				// font folder and Windows\Fonts. A change applies on restart
+				// (the atlas is baked once per context).
+				const auto& avail = Fonts::Available();
+				std::vector<const char*> fontNames;
+				fontNames.reserve(avail.size() + 1);
+				fontNames.push_back("(auto)");
+				int fontSel = 0;
+				for (int i = 0; i < static_cast<int>(avail.size()); ++i) {
+					fontNames.push_back(avail[static_cast<std::size_t>(i)].first.c_str());
+					if (avail[static_cast<std::size_t>(i)].second == s->fontPath) {
+						fontSel = i + 1;
+					}
+				}
+				if (ImGuiMCP::Combo("Font", &fontSel, fontNames.data(), static_cast<int>(fontNames.size()), -1)) {
+					s->fontPath = fontSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fontSel - 1)].second;
+				}
+				Tip("Applies on game restart. (auto) uses the mod font, then a bold Windows system font.");
 				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
 				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
 				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);

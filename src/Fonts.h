@@ -10,4 +10,9 @@ namespace FDNG::Fonts
 	// upscaling the 13px embedded bitmap font. Called once per context (flat
 	// context at D3D init; VR HUD context via the helper's style callback).
 	void Load();
+
+	// Selectable fonts for the config UI: {display name, absolute path}, from
+	// the mod's font folder and the Windows font directory. Cached; a font
+	// change (sFontPath) applies on the next context load (game restart).
+	const std::vector<std::pair<std::string, std::string>>& Available();
 }
