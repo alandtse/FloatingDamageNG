@@ -132,7 +132,8 @@ after each build.
 - Hit-data capture patterns from [KillFeed](https://github.com/powerof3/KillFeed)
   (powerof3; GPL-3.0 with modding exception).
 - The original [Floating Damage](https://www.nexusmods.com/skyrimspecialedition/mods/14332)
-  by dougong defined the genre; this project reimplements the idea on a
+  by [Felisky384](https://www.nexusmods.com/profile/Felisky384) defined the
+  genre; this project reimplements the idea on a
   different capture and rendering architecture.
 
 ## License
