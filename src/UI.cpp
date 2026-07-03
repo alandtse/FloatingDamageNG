@@ -232,7 +232,41 @@ namespace FDNG::UI
 			ImGuiMCP::Dummy({ w, h + 6.0f });
 		}
 
-		void __stdcall RenderSettings()
+		// Shared Save / Reload / Reset row shown at the bottom of every
+		// settings page (all act on the one Settings singleton).
+		void SaveRow(Settings* s)
+		{
+			ImGuiMCP::Separator();
+			if (ImGuiMCP::Button("Save to INI", { 0, 0 })) {
+				s->Save();
+			}
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
+				s->Load();
+			}
+			// Reset is destructive and sits next to Save/Reload, so gate it
+			// behind a second click.
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			static bool confirmReset = false;
+			if (!confirmReset) {
+				if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
+					confirmReset = true;
+				}
+			} else {
+				if (ImGuiMCP::Button("Confirm reset", { 0, 0 })) {
+					s->ResetToDefaults();
+					confirmReset = false;
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Cancel", { 0, 0 })) {
+					confirmReset = false;
+				}
+			}
+			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
+		}
+
+		// "Numbers" page: everything about how the numbers look and move.
+		void __stdcall RenderNumbers()
 		{
 			auto* s = Settings::GetSingleton();
 
@@ -494,7 +528,16 @@ namespace FDNG::UI
 				}
 			}
 
-			if (ImGuiMCP::CollapsingHeader("Analytics", 0)) {
+			SaveRow(s);
+		}
+
+		// "Analytics & Debug" page: the combat-log capture module (whose data
+		// the Combat Stats page browses) plus diagnostics.
+		void __stdcall RenderAnalytics()
+		{
+			auto* s = Settings::GetSingleton();
+
+			if (ImGuiMCP::CollapsingHeader("Analytics", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGuiMCP::Checkbox("Combat log", &s->enableCombatLog);
 				Tip("Track each fight: per-combatant damage, healing, crits, time-to-die, DPS. Feeds the Combat Stats page.");
 				ImGuiMCP::BeginDisabled(!s->enableCombatLog);
@@ -533,33 +576,7 @@ namespace FDNG::UI
 				Tip("Once a second, compares each fighter's observed health change against captured events and warns in the log about damage the mod missed.");
 			}
 
-			ImGuiMCP::Separator();
-			if (ImGuiMCP::Button("Save to INI", { 0, 0 })) {
-				s->Save();
-			}
-			ImGuiMCP::SameLine(0.0f, -1.0f);
-			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
-				s->Load();
-			}
-			// Reset is destructive and sits next to Save/Reload, so gate it
-			// behind a second click.
-			ImGuiMCP::SameLine(0.0f, -1.0f);
-			static bool confirmReset = false;
-			if (!confirmReset) {
-				if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
-					confirmReset = true;
-				}
-			} else {
-				if (ImGuiMCP::Button("Confirm reset", { 0, 0 })) {
-					s->ResetToDefaults();
-					confirmReset = false;
-				}
-				ImGuiMCP::SameLine(0.0f, -1.0f);
-				if (ImGuiMCP::Button("Cancel", { 0, 0 })) {
-					confirmReset = false;
-				}
-			}
-			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
+			SaveRow(s);
 		}
 
 		bool NameMatchesFilter(const std::string& a_name, const char* a_filter)
@@ -796,7 +813,8 @@ namespace FDNG::UI
 			return;
 		}
 		SKSEMenuFramework::SetSection("Floating Damage NG");
-		SKSEMenuFramework::AddSectionItem("Settings", RenderSettings);
+		SKSEMenuFramework::AddSectionItem("Numbers", RenderNumbers);
+		SKSEMenuFramework::AddSectionItem("Analytics & Debug", RenderAnalytics);
 		SKSEMenuFramework::AddSectionItem("Combat Stats", RenderStats);
 		logger::info("Registered SMF pages (framework v{:.1f}).", SKSEMenuFramework::GetMenuFrameworkVersion());
 	}
