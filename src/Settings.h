@@ -100,7 +100,7 @@ namespace FDNG
 		float baseFontScale{ 1.0f };
 		float logScaleModifier{ 0.25f };
 		float maxFontScaleCeiling{ 1.6f };
-		bool abbreviateNumbers{ false };  // 1234 -> 1.2k, 3400000 -> 3.4M
+		bool abbreviateNumbers{ false };  // 10000+ only: 12345 -> 12k, 3400000 -> 3.4M
 		// Squash-and-stretch: distort the number vertically while it moves
 		// fast, easing to normal as it slows (launch "juice"). Opt-in.
 		bool squashStretch{ false };
@@ -130,7 +130,8 @@ namespace FDNG
 
 		// [PerType] — optional per-damage-kind overrides, indexed by
 		// std::to_underlying(DamageKind); empty = use the global setting.
-		// motionByKind names a preset; fontByKind an absolute TTF/OTF path.
+		// motionByKind names a preset; fontByKind a TTF/OTF path (absolute, or
+		// relative to the Skyrim folder).
 		std::array<std::string, kDamageKindCount> motionByKind{};
 		std::array<std::string, kDamageKindCount> fontByKind{};
 

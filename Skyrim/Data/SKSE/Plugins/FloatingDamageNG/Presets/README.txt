@@ -1,5 +1,5 @@
 Motion-effect presets. Each .json file here appears in the FloatingDamageNG
-preset picker (SKSE Menu Framework > FloatingDamageNG > Settings > Motion
+preset picker (SKSE Menu Framework > Floating Damage NG > Settings > Motion
 effect > Preset), alongside the built-ins. Selecting one loads its path; you
 can then tune the sliders and re-save.
 

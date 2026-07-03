@@ -44,7 +44,8 @@ namespace FDNG
 
 	namespace
 	{
-		// "1234" -> "1.2k", "3400000" -> "3.4M" when enabled; plain otherwise.
+		// At 10000+ when enabled: "12345" -> "12.3k", "3400000" -> "3.4M";
+		// below the threshold (and always when disabled) it stays plain.
 		void FormatMagnitude(char* a_out, std::size_t a_cap, int a_value, bool a_abbrev)
 		{
 			if (a_abbrev && a_value >= 10000) {
