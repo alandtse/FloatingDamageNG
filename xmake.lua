@@ -122,13 +122,34 @@ after_build(function(target)
 
     local dll = target:targetfile()
     local pdb = target:symbolfile()
+    -- Loose data the plugin loads at runtime (motion presets + drop-in folder
+    -- READMEs) — the same tree the release archive ships, so in-game testing
+    -- sees the shipped presets, not just the compiled Float. The INI is left
+    -- alone (menu-managed) so a build never clobbers a tuned config.
+    local dataDir = path.join(os.projectdir(), "Skyrim", "Data", "SKSE", "Plugins", "FloatingDamageNG")
     for _, dir in ipairs(targets) do
         local dest = path.join(dir, "SKSE", "Plugins")
         os.mkdir(dest)
-        os.cp(dll, dest)
-        if os.isfile(pdb) then
-            os.cp(pdb, dest)
+        -- A running game holds the DLL/PDB locks; skip them with a warning
+        -- instead of aborting, so the presets (never locked) still deploy and
+        -- the other target still runs. The build itself already succeeded.
+        try({
+            function()
+                os.cp(dll, dest)
+                if os.isfile(pdb) then
+                    os.cp(pdb, dest)
+                end
+                print("Deployed DLL to " .. dest)
+            end,
+            catch({
+                function()
+                    print("Skipped DLL for " .. dest .. " (game running?); presets still deploy")
+                end,
+            }),
+        })
+        if os.isdir(dataDir) then
+            os.cp(dataDir, dest) -- -> <dest>/FloatingDamageNG/{Presets,Fonts}
+            print("Deployed presets to " .. dest)
         end
-        print("Deployed to " .. dest)
     end
 end)
