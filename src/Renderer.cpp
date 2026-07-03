@@ -25,7 +25,8 @@ namespace FDNG::Renderer
 		std::vector<ResolvedNumber> g_resolved;
 		std::vector<ImGuiVRHelperPluginAPI::WorldQuad> g_quads;
 
-		constexpr float kBaseFontPx = 48.0f;
+		// Base atlas px for numbers; the user scales it via fBaseFontPixels.
+		float BaseFontPx() { return Settings::GetSingleton()->baseFontPixels; }
 		constexpr float kPanelMarginPx = 16.0f;
 		constexpr float kPanelGapPx = 12.0f;  // enough to prevent quad UV bleed; smaller = more panel capacity
 		// World size of one panel pixel on a billboard (matches FloatingSubtitles' tuning).
@@ -285,7 +286,7 @@ namespace FDNG::Renderer
 				}
 				// Full alpha in the panel; the fade is baked into the text color,
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
-				const float fontPx = kBaseFontPx * rn.scale;
+				const float fontPx = BaseFontPx() * rn.scale;
 				const auto metrics = ComputeStyleMetrics(settings->originStyle, settings->styleThickness);
 				const ImVec2 estimate = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
 				// The subtext can be wider than the main text; reserve for it (at
@@ -396,7 +397,7 @@ namespace FDNG::Renderer
 					const float risePx = (rn.worldPos.z - rn.number->anchor.z) * 0.75f;
 					screenPos = ImVec2(displaySize.x * settings->firstPersonX,
 						displaySize.y * settings->firstPersonY - risePx);
-					fontPx = kBaseFontPx * rn.scale;
+					fontPx = BaseFontPx() * rn.scale;
 				} else {
 					if (!rn.projected) {
 						continue;
@@ -407,7 +408,7 @@ namespace FDNG::Renderer
 					// distance.
 					const float distMeters = std::max(playerPos.GetDistance(rn.worldPos) * kGameUnitToMeter, 0.1f);
 					const float perspective = std::clamp(kQuadRefDistanceMeters / distMeters, 0.25f, 1.25f);
-					fontPx = kBaseFontPx * rn.scale * perspective;
+					fontPx = BaseFontPx() * rn.scale * perspective;
 				}
 
 				const ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
@@ -485,6 +486,7 @@ namespace FDNG::Renderer
 				Capture::GetSingleton()->ProcessQueued();
 				CombatLog::GetSingleton()->Tick();
 				Capture::GetSingleton()->AuditTick();
+				NumberManager::GetSingleton()->PreviewTick();
 
 				if (REL::Module::IsVR()) {
 					if (!WorldQuadActive()) {

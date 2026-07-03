@@ -9,16 +9,13 @@ namespace FDNG
 {
 	namespace
 	{
-		// Kinematic constants, in Skyrim game units (1 unit ≈ 1.428 cm).
-		constexpr float kFloatRiseSpeed = 45.0f;
-		constexpr float kArcLateralSpeed = 55.0f;
-		constexpr float kArcLaunchSpeed = 90.0f;
-		constexpr float kArcGravity = 220.0f;
-		constexpr float kRadialSpeed = 45.0f;
-		constexpr float kSpreadStep = 30.0f;  // lateral gap between stacked numbers, game units
+		// In Skyrim game units (1 unit ≈ 1.428 cm). Motion speeds/accels now
+		// live in the data-driven MotionProfile (Settings).
+		constexpr float kSpreadStep = 30.0f;  // diagonal-alternate lateral gap, game units
 		constexpr float kFadePortion = 0.3f;  // alpha ramps out over the final 30% of life
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
+		constexpr float kDegToRad = 0.01745329f;
 
 		// Crowd hierarchy comes from size and outline color (see the
 		// renderer), never opacity — alpha attenuation proved to scale
@@ -151,9 +148,9 @@ namespace FDNG
 		n.flags = a_event.flags;
 		n.lifetime = settings->quadLifetimeSeconds * (a_event.flags.critical ? 1.35f : 1.0f);
 
-		// Anti-stacking: rapid hits on one target alternate left/right of it
-		// along the player's view axis with a growing step, which separates
-		// them where the player actually sees overlap (screen-horizontal).
+		// Screen-relative basis at the target: `right` is horizontal-perp to
+		// the player's view, `up` is world Z. Rapid hits de-overlap and burst
+		// patterns fan out within this basis.
 		RE::NiPoint3 right{ 1.0f, 0.0f, 0.0f };
 		if (const auto player = RE::PlayerCharacter::GetSingleton()) {
 			auto toVictim = a_event.anchor - player->GetPosition();
@@ -162,37 +159,121 @@ namespace FDNG
 				right = { toVictim.y / len, -toVictim.x / len, 0.0f };
 			}
 		}
+		const RE::NiPoint3 up{ 0.0f, 0.0f, 1.0f };
 		const auto k = static_cast<int>(victimCount);
-		const float side = (k % 2 == 1) ? 1.0f : -1.0f;
-		const float step = k == 0 ? 0.0f : kSpreadStep * static_cast<float>((k + 1) / 2);
-		n.spread = right * (side * step);
-		n.arcDir = k == 0 ? right : right * side;
+
+		switch (settings->spreadPattern) {
+		case SpreadPattern::kRotate:
+			{
+				// Fireworks: each hit rotates the launch around the view axis; the
+				// launch tilts up-and-out so numbers spray diagonally.
+				const float ang = static_cast<float>(k) * settings->spawnAngleDeg * kDegToRad;
+				const RE::NiPoint3 dir = right * std::cos(ang) + up * std::sin(ang);
+				n.launchDir = dir;
+				n.spread = { 0.0f, 0.0f, 0.0f };
+				break;
+			}
+		case SpreadPattern::kDiagonalAlternate:
+			{
+				// Alternate up-left / up-right diagonals at the configured tilt.
+				const float side = (k % 2 == 1) ? 1.0f : -1.0f;
+				const float tilt = std::clamp(settings->spawnAngleDeg, 0.0f, 89.0f) * kDegToRad;
+				n.launchDir = right * (side * std::cos(tilt)) + up * std::sin(tilt);
+				n.spread = right * (side * kSpreadStep * 0.5f * static_cast<float>((k + 1) / 2));
+				break;
+			}
+		case SpreadPattern::kAlternate:
+		default:
+			{
+				// Left/right along screen-horizontal with a growing step; a bias
+				// shifts the whole distribution toward one side.
+				const float side = (k % 2 == 1) ? 1.0f : -1.0f;
+				const float biased = std::clamp(side + settings->rapidHitBias, -1.0f, 1.0f);
+				const float step = k == 0 ? 0.0f : settings->rapidHitSpread * static_cast<float>((k + 1) / 2);
+				n.spread = right * (biased * step);
+				n.launchDir = k == 0 ? right : right * (biased >= 0.0f ? 1.0f : -1.0f);
+				break;
+			}
+		}
 
 		BuildText(n);
 	}
 
 	RE::NiPoint3 NumberManager::KinematicOffset(const Number& a_number) const
 	{
-		const auto settings = Settings::GetSingleton();
-		const float t = a_number.age * settings->globalSpeedMultiplier;
+		// Data-driven path: travel along the number's launch direction plus an
+		// independent vertical term. Every built-in effect (Float/Arc/Radial/
+		// Fireworks) is a parameter set fed through this one integrator.
+		const auto& m = Settings::GetSingleton()->motion;
+		const float t = a_number.age * Settings::GetSingleton()->globalSpeedMultiplier;
 
-		switch (settings->profile) {
-		case KinematicProfile::kArc:
-			return {
-				a_number.arcDir.x * kArcLateralSpeed * t,
-				a_number.arcDir.y * kArcLateralSpeed * t,
-				kArcLaunchSpeed * t - 0.5f * kArcGravity * t * t
-			};
-		case KinematicProfile::kRadial:
-			{
-				// Outward burst that decelerates smoothly (AoE-friendly).
-				const float travel = kRadialSpeed * (1.0f - std::exp(-2.5f * t)) / 2.5f * 3.0f;
-				return { a_number.arcDir.x * travel, a_number.arcDir.y * travel, 10.0f * t };
-			}
-		case KinematicProfile::kFloat:
-		default:
-			return { 0.0f, 0.0f, kFloatRiseSpeed * t };
+		const float travel = m.lateralDamping > 0.001f ?
+		                         m.lateralSpeed * (1.0f - std::exp(-m.lateralDamping * t)) / m.lateralDamping :
+		                         m.lateralSpeed * t;
+		const float vertical = m.riseSpeed * t + 0.5f * m.riseAccel * t * t;
+		return a_number.launchDir * travel + RE::NiPoint3{ 0.0f, 0.0f, vertical };
+	}
+
+	void NumberManager::PreviewTick()
+	{
+		const auto settings = Settings::GetSingleton();
+		if (!settings->previewMode) {
+			return;
 		}
+		const auto now = std::chrono::steady_clock::now();
+		if (now - _lastPreview < std::chrono::milliseconds(700)) {
+			return;
+		}
+		_lastPreview = now;
+
+		// Target the console selection (prid) or fall back to the player.
+		RE::TESObjectREFR* target = nullptr;
+		if (const auto sel = RE::Console::GetSelectedRef()) {
+			target = sel.get();
+		}
+		if (!target) {
+			target = RE::PlayerCharacter::GetSingleton();
+		}
+		const auto actor = target ? target->As<RE::Actor>() : nullptr;
+		if (!actor || !actor->Is3DLoaded()) {
+			return;
+		}
+
+		// Rotate through a representative set so colors, crit sizing, healing,
+		// and the origin markers all show while tuning.
+		struct Sample
+		{
+			float amount;
+			DamageKind kind;
+			bool crit;
+			OriginTier origin;
+			const char* location;
+		};
+		static constexpr Sample kSamples[] = {
+			{ 42.0f, DamageKind::kPhysical, false, OriginTier::kPlayer, "" },
+			{ 88.0f, DamageKind::kFire, true, OriginTier::kPlayer, "" },
+			{ 25.0f, DamageKind::kFrost, false, OriginTier::kPlayerVictim, "" },
+			{ 60.0f, DamageKind::kShock, false, OriginTier::kPlayer, "HEADSHOT" },
+			{ 30.0f, DamageKind::kHealing, false, OriginTier::kPlayer, "" },
+		};
+		static std::size_t idx = 0;
+		const auto& s = kSamples[idx % std::size(kSamples)];
+		++idx;
+
+		DamageEvent event;
+		event.victimID = actor->GetFormID();
+		if (const auto middle = actor->GetMiddleHighProcess(); middle && middle->headNode) {
+			event.anchor = middle->headNode->world.translate;
+		} else {
+			event.anchor = actor->GetPosition();
+			event.anchor.z += actor->GetHeight();
+		}
+		event.amount = s.amount;
+		event.kind = s.kind;
+		event.origin = s.origin;
+		event.flags.critical = s.crit;
+		std::snprintf(event.location, sizeof(event.location), "%s", s.location);
+		Enqueue(event);
 	}
 
 	void NumberManager::Update(std::vector<ResolvedNumber>& a_out)
@@ -284,9 +365,22 @@ namespace FDNG
 				settings->baseFontScale + std::log10(std::max(n.amount, 1.0f)) * settings->logScaleModifier,
 				kMinMagnitudeScale, settings->maxFontScaleCeiling);
 
+			// User origin offset, in a view-relative basis (up / toward the
+			// player / lateral) so the knobs read the same from any angle.
+			RE::NiPoint3 originShift{ 0.0f, 0.0f, settings->originOffsetUp };
+			if (settings->originOffsetToward != 0.0f || settings->originOffsetSide != 0.0f) {
+				auto toPlayer = playerPos - n.anchor;
+				toPlayer.z = 0.0f;
+				if (const float len = toPlayer.Length(); len > 1.0f) {
+					const RE::NiPoint3 fwd{ toPlayer.x / len, toPlayer.y / len, 0.0f };
+					const RE::NiPoint3 side{ -fwd.y, fwd.x, 0.0f };
+					originShift += fwd * settings->originOffsetToward + side * settings->originOffsetSide;
+				}
+			}
+
 			ResolvedNumber resolved;
 			resolved.number = &n;
-			resolved.worldPos = n.anchor + n.spread + KinematicOffset(n);
+			resolved.worldPos = n.anchor + n.spread + originShift + KinematicOffset(n);
 			resolved.scale = scaleMult * magnitudeScale;
 			resolved.alpha = alphaMult;
 			a_out.push_back(resolved);

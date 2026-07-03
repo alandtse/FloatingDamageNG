@@ -5,12 +5,46 @@
 
 namespace FDNG
 {
-	enum class KinematicProfile : std::int32_t
+	// A data-driven motion path for a floating number. The built-in effects
+	// are just preset instances of this, so a custom path and a built-in run
+	// through the exact same integrator, travelling along the per-number
+	// launch direction the spread pattern chose:
+	//   travel(t)   = damping > 0 ? speed*(1-e^-damping*t)/damping : speed*t
+	//   vertical(t) = riseSpeed*t + 0.5*riseAccel*t^2
+	struct MotionProfile
 	{
-		kFloat = 0,
-		kArc = 1,
-		kRadial = 2
+		float riseSpeed{ 45.0f };      // constant upward velocity, game units/s
+		float riseAccel{ 0.0f };       // vertical acceleration; negative = arc gravity
+		float lateralSpeed{ 0.0f };    // velocity along the launch direction
+		float lateralDamping{ 0.0f };  // 0 = linear travel; >0 = exponential ease-out (burst)
 	};
+
+	// How each successive number on one target picks its launch direction.
+	enum class SpreadPattern : std::int32_t
+	{
+		kAlternate = 0,          // left/right along the screen-horizontal (bias-able)
+		kRotate = 1,             // rotate the launch by spawnAngle each hit (fireworks / clockwise)
+		kDiagonalAlternate = 2,  // alternate up-left / up-right diagonals
+	};
+
+	// A full spawn "effect": the motion path plus how launch directions are
+	// distributed. Built-ins and user customs share this shape.
+	struct EffectPreset
+	{
+		const char* name;
+		MotionProfile motion;
+		SpreadPattern spread;
+		float spawnAngleDeg;  // per-hit rotation (kRotate) or diagonal tilt (kDiagonalAlternate)
+	};
+	// Order is the menu combo order; index persists as iSelectedProfile.
+	inline constexpr std::array<EffectPreset, 4> kEffectPresets{ {
+		{ "Float", { 45.0f, 0.0f, 0.0f, 0.0f }, SpreadPattern::kAlternate, 0.0f },
+		{ "Arc", { 90.0f, -220.0f, 55.0f, 0.0f }, SpreadPattern::kAlternate, 0.0f },
+		{ "Radial", { 10.0f, 0.0f, 135.0f, 2.5f }, SpreadPattern::kAlternate, 0.0f },
+		// Fireworks: strong damped burst up-and-out, gravity pulling it back,
+		// each hit rotated by a near-star angle for a spray.
+		{ "Fireworks", { 40.0f, -160.0f, 150.0f, 3.5f }, SpreadPattern::kRotate, 144.0f },
+	} };
 
 	// How a number marks its origin (whose fight it is).
 	enum class OriginStyle : std::int32_t
@@ -40,14 +74,32 @@ namespace FDNG
 		int maxConcurrentQuads{ 40 };
 
 		// [DynamicSizing]
+		float baseFontPixels{ 48.0f };  // atlas size the numbers draw at before scaling
 		float baseFontScale{ 1.0f };
 		float logScaleModifier{ 0.25f };
 		float maxFontScaleCeiling{ 1.6f };
 
-		// [KinematicProfiles]
-		KinematicProfile profile{ KinematicProfile::kArc };
+		// [KinematicProfiles] — the active spawn effect (a preset copied here,
+		// then freely tuned).
+		int motionPreset{ 1 };  // last-applied preset index (menu default; Arc)
+		MotionProfile motion{ kEffectPresets[1].motion };
+		SpreadPattern spreadPattern{ SpreadPattern::kAlternate };
+		float spawnAngleDeg{ 0.0f };  // per-hit rotation / diagonal tilt
 		float globalSpeedMultiplier{ 1.1f };
 		float quadLifetimeSeconds{ 1.5f };
+
+		// [Origin] — spawn-point offset from the victim's head, view-relative
+		// (up, toward the player, and lateral). Previewable against a
+		// console-selected target.
+		float originOffsetUp{ 0.0f };
+		float originOffsetToward{ 0.0f };
+		float originOffsetSide{ 0.0f };
+		// Rapid hits on one target step apart to de-overlap. Spacing is the
+		// per-step gap; bias favors one side instead of alternating evenly
+		// (kAlternate only; 0 = symmetric).
+		float rapidHitSpread{ 30.0f };
+		float rapidHitBias{ 0.0f };  // -1 all left ... 0 alternate ... +1 all right
+		bool previewMode{ false };   // spawn sample numbers on the selected ref (or player)
 
 		// [Behavior]
 		bool showMitigation{ true };

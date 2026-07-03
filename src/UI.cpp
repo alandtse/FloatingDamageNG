@@ -185,18 +185,63 @@ namespace FDNG::UI
 				ImGuiMCP::SliderInt("Max numbers on screen", &s->maxConcurrentQuads, 5, 128, "%d", 0);
 			}
 
-			if (ImGuiMCP::CollapsingHeader("Size and motion", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
-				ImGuiMCP::SliderFloat("Base size", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
+			if (ImGuiMCP::CollapsingHeader("Size", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
+				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
+				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
 				ImGuiMCP::SliderFloat("Big hits grow by", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
 				Tip("How much larger high-damage numbers render (logarithmic in the damage). 0 = all numbers equal size.");
 				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
-				int profile = static_cast<int>(s->profile);
-				const char* profiles[] = { "Float (straight rise)", "Arc (tossed sideways)", "Radial burst" };
-				if (ImGuiMCP::Combo("Motion", &profile, profiles, 3, -1)) {
-					s->profile = static_cast<KinematicProfile>(profile);
+			}
+
+			if (ImGuiMCP::CollapsingHeader("Motion effect", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				// A preset just copies its bundle into the live fields; tune from there.
+				int preset = s->motionPreset;
+				const char* presetNames[] = { "Float", "Arc", "Radial", "Fireworks" };
+				if (ImGuiMCP::Combo("Preset", &preset, presetNames, 4, -1)) {
+					s->motionPreset = preset;
+					const auto& p = kEffectPresets[static_cast<std::size_t>(preset)];
+					s->motion = p.motion;
+					s->spreadPattern = p.spread;
+					s->spawnAngleDeg = p.spawnAngleDeg;
 				}
+				Tip("A starting point. Editing any slider below customizes it; the built-ins are defined the same way.");
+				ImGuiMCP::SliderFloat("Rise speed", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
+				Tip("Upward velocity. Negative sinks.");
+				ImGuiMCP::SliderFloat("Rise accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
+				Tip("Vertical acceleration. Negative = gravity (arc/fireworks fall back down).");
+				ImGuiMCP::SliderFloat("Launch speed", &s->motion.lateralSpeed, 0.0f, 250.0f, "%.0f", 0);
+				Tip("Velocity along the launch direction (sideways/outward).");
+				ImGuiMCP::SliderFloat("Launch damping", &s->motion.lateralDamping, 0.0f, 12.0f, "%.1f", 0);
+				Tip("0 = travels at constant speed; higher = bursts out then eases to a stop (Radial/Fireworks feel).");
+
+				int pattern = static_cast<int>(s->spreadPattern);
+				const char* patterns[] = { "Alternate (left/right)", "Rotate (fireworks)", "Diagonal alternate" };
+				if (ImGuiMCP::Combo("Spread pattern", &pattern, patterns, 3, -1)) {
+					s->spreadPattern = static_cast<SpreadPattern>(pattern);
+				}
+				Tip("How successive hits on one target fan out so they don't overlap.");
+				if (s->spreadPattern == SpreadPattern::kAlternate) {
+					ImGuiMCP::SliderFloat("Rapid-hit spacing", &s->rapidHitSpread, 0.0f, 120.0f, "%.0f", 0);
+					ImGuiMCP::SliderFloat("Side bias", &s->rapidHitBias, -1.0f, 1.0f, "%.2f", 0);
+					Tip("-1 all left, 0 even alternation, +1 all right.");
+				} else {
+					ImGuiMCP::SliderFloat("Angle per hit / tilt", &s->spawnAngleDeg, 0.0f, 180.0f, "%.0f", 0);
+					Tip("Rotate: degrees each successive number turns around the target. Diagonal: launch tilt above horizontal.");
+				}
+
 				ImGuiMCP::SliderFloat("Speed", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
 				ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
+			}
+
+			if (ImGuiMCP::CollapsingHeader("Spawn origin", 0)) {
+				ImGuiMCP::SliderFloat("Offset up", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
+				ImGuiMCP::SliderFloat("Offset toward you", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
+				ImGuiMCP::SliderFloat("Offset sideways", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
+				Tip("Shift where numbers spawn relative to the target's head, in a view-relative frame (game units).");
+				if (ImGuiMCP::Checkbox("Live preview on target", &s->previewMode)) {
+				}
+				Tip("Spawns sample numbers on your console-selected target (open the console and click an NPC, or 'prid <id>'); falls back to you. Tune motion/offset/font and watch it live.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Thresholds", 0)) {

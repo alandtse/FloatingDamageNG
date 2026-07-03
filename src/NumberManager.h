@@ -13,10 +13,10 @@ namespace FDNG
 	{
 		bool active{ false };
 		RE::FormID victimID{ 0 };
-		RE::NiPoint3 anchor;  // victim head; refreshed each frame while the victim is loaded
-		RE::NiPoint3 spread;  // anti-stacking displacement (fixed at spawn)
-		RE::NiPoint3 arcDir;  // horizontal unit direction for arc/radial motion
-		float age{ 0.0f };    // seconds since spawn
+		RE::NiPoint3 anchor;     // victim head; refreshed each frame while the victim is loaded
+		RE::NiPoint3 spread;     // anti-stacking displacement (fixed at spawn)
+		RE::NiPoint3 launchDir;  // unit launch direction (may be diagonal for burst patterns)
+		float age{ 0.0f };       // seconds since spawn
 		float lifetime{ 1.5f };
 		float amount{ 0.0f };
 		float mitigated{ 0.0f };
@@ -60,6 +60,12 @@ namespace FDNG
 		// Returns entries in a caller-owned buffer (reused across frames).
 		void Update(std::vector<ResolvedNumber>& a_out);
 
+		// Main thread: when preview mode is on, periodically spawn sample
+		// numbers on the console-selected reference (or the player) so the
+		// user can tune fonts/motion/offset live. `prid <id>` to pick a
+		// target from the console.
+		void PreviewTick();
+
 	private:
 		void Spawn(const DamageEvent& a_event);
 		void BuildText(Number& a_number) const;
@@ -73,5 +79,6 @@ namespace FDNG
 		std::size_t _queueCount{ 0 };
 
 		std::chrono::steady_clock::time_point _lastUpdate{};
+		std::chrono::steady_clock::time_point _lastPreview{};
 	};
 }

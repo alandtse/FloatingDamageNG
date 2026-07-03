@@ -30,12 +30,19 @@ armor)`, `(-30 blocked)` with the true blocked amount, or `(-20 resisted)` —
 - Player-received damage and healing: over your head in third person, pinned
   to a configurable screen spot in first person (flat), anchored ~1 m ahead at
   chest height in VR.
-- Three motion profiles: Float, Arc (parabolic), Radial burst. Big hits render
-  bigger (log-scaled by damage). **Whose fight it is** reads from a selectable
-  origin marker — colored text outline, underline, or box (your hits black,
-  damage you take red, follower damage blue, bystander fights gray; all
-  themable, with a live preview in the menu) — and follower/NPC-vs-NPC numbers
-  render smaller and distance-culled.
+- **Fully tunable motion**, presets included: Float, Arc (parabolic), Radial
+  burst, and Fireworks (rotating diagonal spray). A preset seeds a small set
+  of physics knobs — rise speed, gravity, launch speed, damping, plus the
+  spread pattern (alternate / rotate / diagonal) and per-hit angle — that you
+  can freely edit; the built-ins are defined the exact same way. Font size,
+  base scale, and how much big hits grow are all sliders, and the spawn point
+  can be nudged up / toward you / sideways. A **live preview** spawns sample
+  numbers on your console-selected target (`prid`) so you can tune it all in
+  real time.
+- **Whose fight it is** reads from a selectable origin marker — colored text
+  outline, underline, or box (your hits black, damage you take red, follower
+  damage blue, bystander fights gray; all themable, with a live preview in the
+  menu) — and follower/NPC-vs-NPC numbers render smaller and distance-culled.
 - **Combat analytics** (optional): each fight is logged as a session — per
   combatant damage dealt/taken, healing, crits, time-to-die, who fled — with
   real, active, and peak DPS. Per-combatant drill-downs show damage **by

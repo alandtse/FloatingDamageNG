@@ -62,13 +62,34 @@ namespace FDNG
 		maxVisibilityRadiusMeters = static_cast<float>(ini.GetDoubleValue("CoreFilters", "fMaxVisibilityRadius", maxVisibilityRadiusMeters));
 		maxConcurrentQuads = static_cast<int>(ini.GetLongValue("CoreFilters", "iMaxConcurrentQuads", maxConcurrentQuads));
 
+		baseFontPixels = std::clamp(static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fBaseFontPixels", baseFontPixels)), 16.0f, 128.0f);
 		baseFontScale = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale));
 		logScaleModifier = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier));
 		maxFontScaleCeiling = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling));
 
-		profile = static_cast<KinematicProfile>(std::clamp<long>(ini.GetLongValue("KinematicProfiles", "iSelectedProfile", std::to_underlying(profile)), 0, 2));
+		// Seed the active motion path from the last-applied preset, then let
+		// explicit fields override — so a legacy INI (preset index only) still
+		// gets sensible values and a tuned INI keeps its custom path.
+		motionPreset = static_cast<int>(std::clamp<long>(ini.GetLongValue("KinematicProfiles", "iSelectedProfile", motionPreset), 0, static_cast<long>(kEffectPresets.size()) - 1));
+		const auto& preset = kEffectPresets[static_cast<std::size_t>(motionPreset)];
+		motion = preset.motion;
+		spreadPattern = preset.spread;
+		spawnAngleDeg = preset.spawnAngleDeg;
+		motion.riseSpeed = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fRiseSpeed", motion.riseSpeed));
+		motion.riseAccel = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fRiseAccel", motion.riseAccel));
+		motion.lateralSpeed = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fLateralSpeed", motion.lateralSpeed));
+		motion.lateralDamping = std::clamp(static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fLateralDamping", motion.lateralDamping)), 0.0f, 20.0f);
+		spreadPattern = static_cast<SpreadPattern>(std::clamp<long>(ini.GetLongValue("KinematicProfiles", "iSpreadPattern", std::to_underlying(spreadPattern)), 0, 2));
+		spawnAngleDeg = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fSpawnAngle", spawnAngleDeg));
 		globalSpeedMultiplier = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fGlobalSpeedMultiplier", globalSpeedMultiplier));
 		quadLifetimeSeconds = static_cast<float>(ini.GetDoubleValue("KinematicProfiles", "fQuadLifetimeSeconds", quadLifetimeSeconds));
+
+		originOffsetUp = static_cast<float>(ini.GetDoubleValue("Origin", "fOffsetUp", originOffsetUp));
+		originOffsetToward = static_cast<float>(ini.GetDoubleValue("Origin", "fOffsetToward", originOffsetToward));
+		originOffsetSide = static_cast<float>(ini.GetDoubleValue("Origin", "fOffsetSide", originOffsetSide));
+		rapidHitSpread = std::clamp(static_cast<float>(ini.GetDoubleValue("Origin", "fRapidHitSpread", rapidHitSpread)), 0.0f, 120.0f);
+		rapidHitBias = std::clamp(static_cast<float>(ini.GetDoubleValue("Origin", "fRapidHitBias", rapidHitBias)), -1.0f, 1.0f);
+		// previewMode is intentionally NOT persisted — it is a live tuning aid.
 
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
 		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
@@ -129,8 +150,8 @@ namespace FDNG
 			log->flush_on(debugLog ? spdlog::level::debug : spdlog::level::info);
 		}
 
-		logger::info("Settings loaded (profile={}, lifetime={:.2f}s, maxQuads={}).",
-			std::to_underlying(profile), quadLifetimeSeconds, maxConcurrentQuads);
+		logger::info("Settings loaded (effect={}, lifetime={:.2f}s, maxQuads={}).",
+			motionPreset, quadLifetimeSeconds, maxConcurrentQuads);
 	}
 
 	void Settings::ResetToDefaults()
@@ -166,6 +187,7 @@ namespace FDNG
 		ini.SetDoubleValue("CoreFilters", "fMaxVisibilityRadius", maxVisibilityRadiusMeters);
 		ini.SetLongValue("CoreFilters", "iMaxConcurrentQuads", maxConcurrentQuads);
 
+		ini.SetDoubleValue("DynamicSizing", "fBaseFontPixels", baseFontPixels);
 		ini.SetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale);
 		ini.SetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier);
 		ini.SetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling);
@@ -182,9 +204,21 @@ namespace FDNG
 		// Patterns are load-only (std::regex can't round-trip its source);
 		// leave whatever the user wrote in place.
 
-		ini.SetLongValue("KinematicProfiles", "iSelectedProfile", std::to_underlying(profile));
+		ini.SetLongValue("KinematicProfiles", "iSelectedProfile", motionPreset);
+		ini.SetDoubleValue("KinematicProfiles", "fRiseSpeed", motion.riseSpeed);
+		ini.SetDoubleValue("KinematicProfiles", "fRiseAccel", motion.riseAccel);
+		ini.SetDoubleValue("KinematicProfiles", "fLateralSpeed", motion.lateralSpeed);
+		ini.SetDoubleValue("KinematicProfiles", "fLateralDamping", motion.lateralDamping);
+		ini.SetLongValue("KinematicProfiles", "iSpreadPattern", std::to_underlying(spreadPattern));
+		ini.SetDoubleValue("KinematicProfiles", "fSpawnAngle", spawnAngleDeg);
 		ini.SetDoubleValue("KinematicProfiles", "fGlobalSpeedMultiplier", globalSpeedMultiplier);
 		ini.SetDoubleValue("KinematicProfiles", "fQuadLifetimeSeconds", quadLifetimeSeconds);
+
+		ini.SetDoubleValue("Origin", "fOffsetUp", originOffsetUp);
+		ini.SetDoubleValue("Origin", "fOffsetToward", originOffsetToward);
+		ini.SetDoubleValue("Origin", "fOffsetSide", originOffsetSide);
+		ini.SetDoubleValue("Origin", "fRapidHitSpread", rapidHitSpread);
+		ini.SetDoubleValue("Origin", "fRapidHitBias", rapidHitBias);
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
