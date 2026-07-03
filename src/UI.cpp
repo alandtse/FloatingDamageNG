@@ -264,31 +264,29 @@ namespace FDNG::UI
 				// A preset (built-in or a shared JSON file) copies its bundle
 				// into the live fields; tune from there.
 				const auto& presets = Presets::All();
-				std::vector<const char*> names;
-				names.reserve(presets.size());
-				for (const auto& p : presets) {
-					names.push_back(p.name.c_str());
-				}
-				static int preset = 0;
-				preset = std::clamp(preset, 0, static_cast<int>(presets.size()) - 1);
-				if (ImGuiMCP::Combo("Preset", &preset, names.data(), static_cast<int>(names.size()), -1)) {
-					const auto& p = presets[static_cast<std::size_t>(preset)];
-					s->motion = p.motion;
-					s->spreadPattern = p.spread;
-					s->spawnAngleDeg = p.spawnAngleDeg;
-					if (p.builtIn) {
-						s->motionPreset = preset;
+				// The preset combo is a LOAD action — it copies a preset's
+				// bundle into the live fields below, which are what persist.
+				// Modelling it as an action (not a sticky selection) avoids the
+				// combo drifting out of sync once the fields are tuned.
+				if (ImGuiMCP::BeginCombo("Preset", "Load a preset...", 0)) {
+					for (const auto& p : presets) {
+						if (ImGuiMCP::Selectable(p.name.c_str(), false, 0, { 0, 0 })) {
+							s->motion = p.motion;
+							s->spreadPattern = p.spread;
+							s->spawnAngleDeg = p.spawnAngleDeg;
+						}
 					}
+					ImGuiMCP::EndCombo();
 				}
-				Tip("A starting point (built-ins plus any JSON files in Data/SKSE/Plugins/FloatingDamageNG/Presets). Editing a slider customizes it; built-ins are defined the same way.");
-				ImGuiMCP::SliderFloat("Rise speed", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
-				Tip("Upward velocity. Negative sinks.");
-				ImGuiMCP::SliderFloat("Rise accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
-				Tip("Vertical acceleration. Negative = gravity (arc/fireworks fall back down).");
-				ImGuiMCP::SliderFloat("Launch speed", &s->motion.lateralSpeed, 0.0f, 250.0f, "%.0f", 0);
-				Tip("Velocity along the launch direction (sideways/outward).");
-				ImGuiMCP::SliderFloat("Launch damping", &s->motion.lateralDamping, 0.0f, 12.0f, "%.1f", 0);
-				Tip("0 = travels at constant speed; higher = bursts out then eases to a stop (Radial/Fireworks feel).");
+				Tip("Load a starting point (built-ins plus any JSON in Data/SKSE/Plugins/FloatingDamageNG/Presets), then tune the sliders. Built-ins are defined the same way.");
+				ImGuiMCP::SliderFloat("Rise speed (units/s)", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
+				Tip("How fast a number rises. Negative makes it sink.");
+				ImGuiMCP::SliderFloat("Gravity", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
+				Tip("Downward pull. Negative arcs the number up then back down (arc/fireworks); 0 keeps a steady rise.");
+				ImGuiMCP::SliderFloat("Launch speed (units/s)", &s->motion.lateralSpeed, 0.0f, 250.0f, "%.0f", 0);
+				Tip("How fast a number shoots sideways / outward.");
+				ImGuiMCP::SliderFloat("Slowdown", &s->motion.lateralDamping, 0.0f, 12.0f, "%.1f", 0);
+				Tip("0 = keeps its speed; higher = bursts out fast then coasts to a stop (Radial/Fireworks feel).");
 
 				int pattern = static_cast<int>(s->spreadPattern);
 				const char* patterns[] = { "Alternate (left/right)", "Rotate (fireworks)", "Diagonal alternate" };
@@ -316,17 +314,27 @@ namespace FDNG::UI
 				// Save the current path as a shareable JSON preset file.
 				ImGuiMCP::Separator();
 				static char presetName[48]{};
+				static std::string saveMsg;
 				ImGuiMCP::InputTextWithHint("##fdng_preset_name", "Preset name to save...", presetName, sizeof(presetName), 0, nullptr, nullptr);
 				ImGuiMCP::SameLine(0.0f, -1.0f);
 				if (ImGuiMCP::Button("Save preset", { 0, 0 }) && presetName[0]) {
-					Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg });
-					presetName[0] = '\0';
+					// Keep the typed name on failure so it isn't lost.
+					if (Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg })) {
+						saveMsg = std::format("Saved '{}'.", presetName);
+						presetName[0] = '\0';
+					} else {
+						saveMsg = "Save failed - check the name (letters/numbers/space) and folder permissions.";
+					}
 				}
 				ImGuiMCP::SameLine(0.0f, -1.0f);
 				if (ImGuiMCP::Button("Reload presets", { 0, 0 })) {
 					Presets::Reload();
 				}
-				ImGuiMCP::TextDisabled("Saved to Data/SKSE/Plugins/FloatingDamageNG/Presets - share the .json to trade effects.");
+				if (!saveMsg.empty()) {
+					ImGuiMCP::TextDisabled("%s", saveMsg.c_str());
+				} else {
+					ImGuiMCP::TextDisabled("Saved to Data/SKSE/Plugins/FloatingDamageNG/Presets - share the .json to trade effects.");
+				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Per-type effects", 0)) {
@@ -468,9 +476,23 @@ namespace FDNG::UI
 			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
 				s->Load();
 			}
+			// Reset is destructive and sits next to Save/Reload, so gate it
+			// behind a second click.
 			ImGuiMCP::SameLine(0.0f, -1.0f);
-			if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
-				s->ResetToDefaults();
+			static bool confirmReset = false;
+			if (!confirmReset) {
+				if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
+					confirmReset = true;
+				}
+			} else {
+				if (ImGuiMCP::Button("Confirm reset", { 0, 0 })) {
+					s->ResetToDefaults();
+					confirmReset = false;
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Cancel", { 0, 0 })) {
+					confirmReset = false;
+				}
 			}
 			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
 		}
