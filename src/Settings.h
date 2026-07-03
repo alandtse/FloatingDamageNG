@@ -51,7 +51,8 @@ namespace FDNG
 	{
 		kOutline = 0,    // text outline in the origin color
 		kUnderline = 1,  // thin black outline + origin-colored underline bar
-		kBox = 2         // thin black outline + origin-colored border box
+		kBox = 2,        // thin black outline + origin-colored border box
+		kNone = 3        // plain black outline, no origin color (don't show the source)
 	};
 
 	struct Settings

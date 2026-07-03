@@ -166,9 +166,12 @@ namespace FDNG::Renderer
 			const ImU32 origin = OriginColor(n.origin, alpha);
 			const float thickness = settings->styleThickness;
 
-			const bool outlineStyle = settings->originStyle == OriginStyle::kOutline;
-			const ImU32 textOutline = outlineStyle ? origin : IM_COL32(0, 0, 0, alpha);
-			const float textThickness = outlineStyle ? thickness : 1.0f;
+			// kOutline colors the glyph ring with the origin; kNone keeps the
+			// same full-thickness ring but black (readable, no source shown);
+			// underline/box use a thin black ring plus a separate marker shape.
+			const bool ringStyle = settings->originStyle == OriginStyle::kOutline || settings->originStyle == OriginStyle::kNone;
+			const ImU32 textOutline = settings->originStyle == OriginStyle::kOutline ? origin : IM_COL32(0, 0, 0, alpha);
+			const float textThickness = ringStyle ? thickness : 1.0f;
 			const auto metrics = ComputeStyleMetrics(settings->originStyle, thickness);
 
 			// Base block, then reserve stretch headroom so the VR quad (which

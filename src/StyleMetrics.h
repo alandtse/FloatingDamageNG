@@ -34,6 +34,7 @@ namespace FDNG
 			// The 1 px legibility outline needs a hair of slack too.
 			return { 1.0f, 1.0f, kUnderlineGap + a_thickness };
 		case OriginStyle::kOutline:
+		case OriginStyle::kNone:
 		default:
 			// The ring offsets the glyphs by the full thickness in every
 			// direction; without pads it clips at the block edges.

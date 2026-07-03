@@ -181,9 +181,9 @@ namespace FDNG::UI
 			for (const auto& sm : samples) {
 				const auto fill = ToImCol(sm.fill);
 				const auto marker = ToImCol(sm.marker);
-				const bool outline = s->originStyle == OriginStyle::kOutline;
-				const auto textOutline = outline ? marker : ToImCol(0x000000);
-				const float tt = outline ? t : 1.0f;
+				const bool ringStyle = s->originStyle == OriginStyle::kOutline || s->originStyle == OriginStyle::kNone;
+				const auto textOutline = s->originStyle == OriginStyle::kOutline ? marker : ToImCol(0x000000);
+				const float tt = ringStyle ? t : 1.0f;
 				for (const auto& o : kRingOffsets) {
 					ImGuiMCP::ImDrawListManager::AddText(dl, { x + o[0] * tt, y + o[1] * tt }, textOutline, sm.text);
 				}
@@ -432,8 +432,8 @@ namespace FDNG::UI
 
 			if (ImGuiMCP::CollapsingHeader("Colors and style", 0)) {
 				int style = static_cast<int>(s->originStyle);
-				const char* styles[] = { "Colored outline", "Underline", "Box" };
-				if (ImGuiMCP::Combo("Origin marker", &style, styles, 3, -1)) {
+				const char* styles[] = { "Colored outline", "Underline", "Box", "None (hide source)" };
+				if (ImGuiMCP::Combo("Origin marker", &style, styles, 4, -1)) {
 					s->originStyle = static_cast<OriginStyle>(style);
 				}
 				Tip("How a number shows whose fight it is. The number's own color always means the damage type; the marker uses the four 'Marker' colors below.");
