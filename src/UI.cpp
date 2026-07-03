@@ -149,15 +149,15 @@ namespace FDNG::UI
 			}
 			// One popup is open at a time, so a shared buffer is fine; reset
 			// and focus it when the popup first appears.
-			static char filter[64]{};
+			static char s_filter[64]{};
 			if (ImGuiMCP::IsWindowAppearing()) {
-				filter[0] = '\0';
+				s_filter[0] = '\0';
 				ImGuiMCP::SetKeyboardFocusHere(0);
 			}
-			ImGuiMCP::InputTextWithHint("##fdng_combofilter", "Type to filter...", filter, sizeof(filter), 0, nullptr, nullptr);
+			ImGuiMCP::InputTextWithHint("##fdng_combofilter", "Type to filter...", s_filter, sizeof(s_filter), 0, nullptr, nullptr);
 			bool changed = false;
 			for (int i = 0; i < static_cast<int>(a_options.size()); ++i) {
-				if (!IContains(a_options[static_cast<std::size_t>(i)], filter)) {
+				if (!IContains(a_options[static_cast<std::size_t>(i)], s_filter)) {
 					continue;
 				}
 				if (ImGuiMCP::Selectable(a_options[static_cast<std::size_t>(i)], i == *a_index, 0, { 0, 0 })) {
@@ -234,32 +234,32 @@ namespace FDNG::UI
 
 		// Shared Save / Reload / Reset row shown at the bottom of every
 		// settings page (all act on the one Settings singleton).
-		void SaveRow(Settings* s)
+		void SaveRow(Settings* a_settings)
 		{
 			ImGuiMCP::Separator();
 			if (ImGuiMCP::Button("Save to INI", { 0, 0 })) {
-				s->Save();
+				a_settings->Save();
 			}
 			ImGuiMCP::SameLine(0.0f, -1.0f);
 			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
-				s->Load();
+				a_settings->Load();
 			}
 			// Reset is destructive and sits next to Save/Reload, so gate it
 			// behind a second click.
 			ImGuiMCP::SameLine(0.0f, -1.0f);
-			static bool confirmReset = false;
-			if (!confirmReset) {
+			static bool s_confirmReset = false;
+			if (!s_confirmReset) {
 				if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
-					confirmReset = true;
+					s_confirmReset = true;
 				}
 			} else {
 				if (ImGuiMCP::Button("Confirm reset", { 0, 0 })) {
-					s->ResetToDefaults();
-					confirmReset = false;
+					a_settings->ResetToDefaults();
+					s_confirmReset = false;
 				}
 				ImGuiMCP::SameLine(0.0f, -1.0f);
 				if (ImGuiMCP::Button("Cancel", { 0, 0 })) {
-					confirmReset = false;
+					s_confirmReset = false;
 				}
 			}
 			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
@@ -452,18 +452,17 @@ namespace FDNG::UI
 				for (const auto& f : avail) {
 					fontOpts.push_back(f.first.c_str());
 				}
-				static const char* kKindLabels[] = { "Physical", "Fire", "Frost", "Shock", "Poison", "Magic", "Healing", "Magicka drain", "Stamina drain" };
 				constexpr auto tblFlags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
 				if (ImGuiMCP::BeginTable("##fdng_pertype", 3, tblFlags, { 0, 0 }, 0.0f)) {
 					ImGuiMCP::TableSetupColumn("Damage type", 0, 0.30f, 0);
 					ImGuiMCP::TableSetupColumn("Motion", 0, 0.35f, 0);
 					ImGuiMCP::TableSetupColumn("Font", 0, 0.35f, 0);
 					ImGuiMCP::TableHeadersRow();
-					for (int i = 0; i < 9; ++i) {
-						const auto idx = static_cast<std::size_t>(i);
+					for (std::size_t idx = 0; idx < kPerKindMeta.size(); ++idx) {
+						const int i = static_cast<int>(idx);
 						ImGuiMCP::TableNextRow(0, 0.0f);
 						ImGuiMCP::TableSetColumnIndex(0);
-						ImGuiMCP::Text("%s", kKindLabels[i]);
+						ImGuiMCP::Text("%s", kPerKindMeta[idx].label);
 
 						ImGuiMCP::TableSetColumnIndex(1);
 						ImGuiMCP::SetNextItemWidth(-1.0f);

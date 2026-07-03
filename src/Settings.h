@@ -55,6 +55,27 @@ namespace FDNG
 		kNone = 3        // plain black outline, no origin color (don't show the source)
 	};
 
+	// Per-damage-kind metadata in DamageKind order — the single source of truth
+	// for the [PerType] INI key suffix and the menu label, so a kind's ordering
+	// and spelling live in one place instead of parallel arrays.
+	struct PerKindMeta
+	{
+		const char* iniSuffix;  // sMotion<suffix> / sFont<suffix>
+		const char* label;      // menu display name
+	};
+	inline constexpr std::array<PerKindMeta, 9> kPerKindMeta{ {
+		{ "Physical", "Physical" },
+		{ "Fire", "Fire" },
+		{ "Frost", "Frost" },
+		{ "Shock", "Shock" },
+		{ "Poison", "Poison" },
+		{ "Magic", "Magic" },
+		{ "Healing", "Healing" },
+		{ "MagickaDrain", "Magicka drain" },
+		{ "StaminaDrain", "Stamina drain" },
+	} };
+	inline constexpr std::size_t kDamageKindCount = kPerKindMeta.size();
+
 	struct Settings
 	{
 		static Settings* GetSingleton();
@@ -110,8 +131,8 @@ namespace FDNG
 		// [PerType] — optional per-damage-kind overrides, indexed by
 		// std::to_underlying(DamageKind); empty = use the global setting.
 		// motionByKind names a preset; fontByKind an absolute TTF/OTF path.
-		std::array<std::string, 9> motionByKind{};
-		std::array<std::string, 9> fontByKind{};
+		std::array<std::string, kDamageKindCount> motionByKind{};
+		std::array<std::string, kDamageKindCount> fontByKind{};
 
 		// [Behavior]
 		bool showMitigation{ true };

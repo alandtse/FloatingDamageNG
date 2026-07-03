@@ -35,11 +35,6 @@ namespace FDNG
 			// creature skeletons also carry "Head" in the node name.
 			a_settings.locationTags.push_back({ std::regex{ ".*head.*", std::regex::icase }, "HEADSHOT" });
 		}
-
-		// INI key suffix per DamageKind (index order), for [PerType] overrides.
-		constexpr std::array<const char*, 9> kKindKeys{
-			"Physical", "Fire", "Frost", "Shock", "Poison", "Magic", "Healing", "MagickaDrain", "StaminaDrain"
-		};
 	}
 
 	Settings* Settings::GetSingleton()
@@ -99,11 +94,11 @@ namespace FDNG
 		rapidHitBias = std::clamp(static_cast<float>(ini.GetDoubleValue("Origin", "fRapidHitBias", rapidHitBias)), -1.0f, 1.0f);
 		// previewMode is intentionally NOT persisted — it is a live tuning aid.
 
-		for (std::size_t i = 0; i < kKindKeys.size(); ++i) {
-			const char* motion = ini.GetValue("PerType", std::format("sMotion{}", kKindKeys[i]).c_str());
-			motionByKind[i] = motion ? motion : "";
-			const char* font = ini.GetValue("PerType", std::format("sFont{}", kKindKeys[i]).c_str());
-			fontByKind[i] = font ? font : "";
+		for (std::size_t i = 0; i < kPerKindMeta.size(); ++i) {
+			const char* motionOverride = ini.GetValue("PerType", std::format("sMotion{}", kPerKindMeta[i].iniSuffix).c_str());
+			motionByKind[i] = motionOverride ? motionOverride : "";
+			const char* fontOverride = ini.GetValue("PerType", std::format("sFont{}", kPerKindMeta[i].iniSuffix).c_str());
+			fontByKind[i] = fontOverride ? fontOverride : "";
 		}
 
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
@@ -238,9 +233,9 @@ namespace FDNG
 		ini.SetDoubleValue("Origin", "fRapidHitSpread", rapidHitSpread);
 		ini.SetDoubleValue("Origin", "fRapidHitBias", rapidHitBias);
 
-		for (std::size_t i = 0; i < kKindKeys.size(); ++i) {
-			ini.SetValue("PerType", std::format("sMotion{}", kKindKeys[i]).c_str(), motionByKind[i].c_str());
-			ini.SetValue("PerType", std::format("sFont{}", kKindKeys[i]).c_str(), fontByKind[i].c_str());
+		for (std::size_t i = 0; i < kPerKindMeta.size(); ++i) {
+			ini.SetValue("PerType", std::format("sMotion{}", kPerKindMeta[i].iniSuffix).c_str(), motionByKind[i].c_str());
+			ini.SetValue("PerType", std::format("sFont{}", kPerKindMeta[i].iniSuffix).c_str(), fontByKind[i].c_str());
 		}
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
