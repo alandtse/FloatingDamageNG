@@ -99,6 +99,48 @@ namespace FDNG::UI
 			}
 		}
 
+		bool IContains(const char* a_hay, const char* a_needle)
+		{
+			if (!a_needle || !a_needle[0]) {
+				return true;
+			}
+			const std::string_view hay{ a_hay };
+			const auto it = std::search(hay.begin(), hay.end(), a_needle, a_needle + std::strlen(a_needle),
+				[](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
+			return it != hay.end();
+		}
+
+		// A combo whose popup carries a type-to-filter box — for long lists
+		// (fonts, combatants) a plain dropdown can't scan. Returns true and
+		// updates a_index when a row is picked.
+		bool SearchableCombo(const char* a_label, int* a_index, const std::vector<const char*>& a_options)
+		{
+			const char* preview = (*a_index >= 0 && *a_index < static_cast<int>(a_options.size())) ? a_options[*a_index] : "";
+			if (!ImGuiMCP::BeginCombo(a_label, preview, 0)) {
+				return false;
+			}
+			// One popup is open at a time, so a shared buffer is fine; reset
+			// and focus it when the popup first appears.
+			static char filter[64]{};
+			if (ImGuiMCP::IsWindowAppearing()) {
+				filter[0] = '\0';
+				ImGuiMCP::SetKeyboardFocusHere(0);
+			}
+			ImGuiMCP::InputTextWithHint("##fdng_combofilter", "Type to filter...", filter, sizeof(filter), 0, nullptr, nullptr);
+			bool changed = false;
+			for (int i = 0; i < static_cast<int>(a_options.size()); ++i) {
+				if (!IContains(a_options[static_cast<std::size_t>(i)], filter)) {
+					continue;
+				}
+				if (ImGuiMCP::Selectable(a_options[static_cast<std::size_t>(i)], i == *a_index, 0, { 0, 0 })) {
+					*a_index = i;
+					changed = true;
+				}
+			}
+			ImGuiMCP::EndCombo();
+			return changed;
+		}
+
 		std::uint32_t ToImCol(std::uint32_t a_rgb, std::uint8_t a_alpha = 0xFF)
 		{
 			// ImU32 is ABGR-packed.
@@ -202,10 +244,12 @@ namespace FDNG::UI
 						fontSel = i + 1;
 					}
 				}
-				if (ImGuiMCP::Combo("Font", &fontSel, fontNames.data(), static_cast<int>(fontNames.size()), -1)) {
+				if (SearchableCombo("Font", &fontSel, fontNames)) {
 					s->fontPath = fontSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fontSel - 1)].second;
 				}
-				Tip("Applies on game restart. (auto) uses the mod font, then a bold Windows system font.");
+				Tip("Type to filter your installed fonts. Applies on game restart; (auto) uses the mod font, then a bold Windows system font.");
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				ImGuiMCP::TextDisabled("(restart)");
 				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
 				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
 				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
@@ -596,7 +640,7 @@ namespace FDNG::UI
 				names.push_back(c.name.c_str());
 			}
 			const auto comboID = std::format("Drill-down###fdng_drill{}", a_session.index);
-			ImGuiMCP::Combo(comboID.c_str(), &sel, names.data(), static_cast<int>(names.size()), -1);
+			SearchableCombo(comboID.c_str(), &sel, names);
 
 			const auto& c = a_session.combatants[static_cast<std::size_t>(sel)];
 
