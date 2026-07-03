@@ -381,6 +381,17 @@ namespace FDNG::UI
 							s->spawnAngleDeg = p.spawnAngleDeg;
 							lastLoaded = p.name;
 						}
+						// Hover shows the preset's description and attribution.
+						if ((!p.description.empty() || !p.source.empty()) && ImGuiMCP::IsItemHovered(0)) {
+							std::string tip = p.description;
+							if (!p.source.empty()) {
+								if (!tip.empty()) {
+									tip += "\n";
+								}
+								tip += "Source: " + p.source;
+							}
+							ImGuiMCP::SetTooltip("%s", tip.c_str());
+						}
 					}
 					ImGuiMCP::EndCombo();
 				}

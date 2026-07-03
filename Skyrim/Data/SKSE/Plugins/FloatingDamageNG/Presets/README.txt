@@ -23,3 +23,5 @@ Fields (see "Arc.json" / "Fireworks.json"):
   lateralDamping  0 = constant speed; higher = bursts out then eases to a stop
   spreadPattern   0 alternate L/R, 1 rotate (fireworks), 2 diagonal alternate
   spawnAngle      degrees rotated per hit (rotate) or launch tilt (diagonal)
+  description     optional: shown as a tooltip when you hover the preset
+  source          optional: attribution/credit, also shown in the tooltip

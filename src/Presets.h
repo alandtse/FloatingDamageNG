@@ -22,6 +22,8 @@ namespace FDNG::Presets
 		MotionProfile motion;
 		SpreadPattern spread{ SpreadPattern::kAlternate };
 		float spawnAngleDeg{ 0.0f };
+		std::string description;  // optional: what the effect does (picker tooltip)
+		std::string source;       // optional: attribution / where it came from
 	};
 
 	// Built-ins first, then user files (alphabetical). Cached; call Reload to

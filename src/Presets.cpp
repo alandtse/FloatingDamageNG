@@ -60,6 +60,11 @@ namespace FDNG::Presets
 			e.motion.lateralDamping = std::clamp(num("lateralDamping", 0.0f), 0.0f, 20.0f);
 			e.spread = static_cast<SpreadPattern>(std::clamp(static_cast<int>(num("spreadPattern", 0.0f)), 0, 2));
 			e.spawnAngleDeg = std::clamp(num("spawnAngle", 0.0f), 0.0f, 360.0f);
+			const auto str = [&](const char* a_key) {
+				return json.contains(a_key) && json[a_key].is_string() ? json[a_key].get<std::string>() : std::string{};
+			};
+			e.description = str("description");
+			e.source = str("source");
 			return e;
 		}
 
@@ -139,7 +144,7 @@ namespace FDNG::Presets
 		std::error_code ec;
 		std::filesystem::create_directories(kPresetDir, ec);
 
-		const nlohmann::json json{
+		nlohmann::json json{
 			{ "name", a_effect.name },
 			{ "riseSpeed", a_effect.motion.riseSpeed },
 			{ "riseAccel", a_effect.motion.riseAccel },
@@ -148,6 +153,13 @@ namespace FDNG::Presets
 			{ "spreadPattern", std::to_underlying(a_effect.spread) },
 			{ "spawnAngle", a_effect.spawnAngleDeg },
 		};
+		// Only emit attribution fields when set, so in-game saves stay tidy.
+		if (!a_effect.description.empty()) {
+			json["description"] = a_effect.description;
+		}
+		if (!a_effect.source.empty()) {
+			json["source"] = a_effect.source;
+		}
 		std::ofstream out(std::filesystem::path(kPresetDir) / (file + ".json"));
 		if (!out) {
 			logger::warn("Could not write preset '{}'.", file);
