@@ -14,6 +14,9 @@ namespace FDNG
 		// live in the data-driven MotionProfile (Settings).
 		constexpr float kSpreadStep = 30.0f;  // diagonal-alternate lateral gap, game units
 		constexpr float kFadePortion = 0.3f;  // alpha ramps out over the final 30% of life
+		// Minimum height a number should reach above the head anchor so its quad
+		// clears the skull mesh (else it is self-occluded in VR, e.g. Freeze).
+		constexpr float kHeadClearanceUnits = 15.0f;
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
 		constexpr float kDegToRad = 0.01745329f;
@@ -228,6 +231,25 @@ namespace FDNG
 				n.launchDir = k == 0 ? right : right * (biased >= 0.0f ? 1.0f : -1.0f);
 				break;
 			}
+		}
+
+		// Self-occlusion clearance: an effect that never lifts the number clear
+		// of the head (Freeze, Drop) leaves its quad in the skull mesh, occluded
+		// in VR. Sample the vertical path (launch tilt + rise); if its peak stays
+		// under the head clearance, raise the spawn just enough to float it clear.
+		// Rising effects (Arc, Fireworks, Accelerate) peak high and get no lift.
+		{
+			const float maxT = settings->quadLifetimeSeconds * settings->globalSpeedMultiplier;
+			float peakUp = 0.0f;
+			for (int i = 1; i <= 6; ++i) {
+				const float t = maxT * (static_cast<float>(i) / 6.0f);
+				const float travel = n.motion.lateralDamping > 0.001f ?
+				                         n.motion.lateralSpeed * (1.0f - std::exp(-n.motion.lateralDamping * t)) / n.motion.lateralDamping :
+				                         n.motion.lateralSpeed * t;
+				const float vert = n.launchDir.z * travel + n.motion.riseSpeed * t + 0.5f * n.motion.riseAccel * t * t;
+				peakUp = std::max(peakUp, vert);
+			}
+			n.spread.z += std::max(0.0f, kHeadClearanceUnits - peakUp);
 		}
 
 		BuildText(n);
