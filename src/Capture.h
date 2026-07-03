@@ -32,6 +32,7 @@ namespace FDNG
 		bool blocked{ false };
 		bool sneak{ false };
 		bool powerAttack{ false };
+		bool bash{ false };
 	};
 
 	// Word used for the mitigation subtext — mitigation has different causes.
@@ -119,9 +120,11 @@ namespace FDNG
 		{
 			Clock::time_point stamp;
 			RE::NiPoint3 hitPos;  // engine contact point, for locational lookup
+			RE::FormID weaponID{ 0 };
 			float physicalDamage{ 0.0f };
 			float resistedPhysical{ 0.0f };  // armor
 			float resistedTyped{ 0.0f };     // enchant payload resisted
+			float blockedDamage{ 0.0f };     // reconstructed from percentBlocked
 			float ampMult{ 0.0f };
 			bool ranged{ false };  // bow/crossbow hit — locational + amplification apply
 			HitFlags flags;
@@ -132,6 +135,7 @@ namespace FDNG
 			Clock::time_point stamp;
 			DamageKind kind{ DamageKind::kMagic };
 			RE::FormID casterID{ 0 };
+			RE::FormID mgefID{ 0 };
 		};
 
 		// Sub-threshold tick pool: concentration effects apply in sub-point
@@ -182,9 +186,9 @@ namespace FDNG
 		}
 
 		// Fresh-entry lookup in the recent hostile-apply map. Returns true
-		// when an unexpired entry exists; outputs its kind and resolved
-		// caster (null when the apply had none).
-		bool FindRecentMagic(RE::FormID a_victimID, DamageKind& a_kindOut, RE::Actor*& a_attackerOut);
+		// when an unexpired entry exists; outputs its kind, effect, and
+		// resolved caster (null when the apply had none).
+		bool FindRecentMagic(RE::FormID a_victimID, DamageKind& a_kindOut, RE::Actor*& a_attackerOut, RE::FormID* a_mgefOut = nullptr);
 
 		// Main-thread processing per source.
 		void ProcessWeaponHit(const RawEvent& a_raw, RE::Actor* a_victim);
@@ -194,13 +198,15 @@ namespace FDNG
 		void ProcessRestore(RE::Actor* a_target, float a_amount, RE::Actor* a_healer);
 
 		// Shared tail: analytics, display filters, spawn. Main thread.
+		// a_sourceID identifies the weapon or magic effect for the analytics
+		// drill-down (0 = unarmed/untracked).
 		void EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
 			float a_ampMult = 0.0f, const char* a_location = nullptr,
-			MitigationLabel a_mitLabel = MitigationLabel::kResisted);
+			MitigationLabel a_mitLabel = MitigationLabel::kResisted, RE::FormID a_sourceID = 0);
 
 		// EmitDamage with sub-threshold tick pooling (concentration spells
 		// apply in sub-point per-frame deltas).
-		void EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated = 0.0f);
+		void EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated = 0.0f, RE::FormID a_sourceID = 0);
 
 		// Correlation windows: a weapon hit's HandleHealthDamage lands the same
 		// frame; magic apply can precede its first damage tick by a bit longer.

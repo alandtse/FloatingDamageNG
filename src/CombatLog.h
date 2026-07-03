@@ -35,6 +35,17 @@ namespace FDNG
 			float activeDPS{ 0.0f };
 		};
 
+		// One row of a drill-down table (per damage source or per target).
+		struct BreakdownRow
+		{
+			std::string name;  // spell/weapon or target name
+			DamageKind kind{ DamageKind::kPhysical };
+			float total{ 0.0f };
+			float mitigated{ 0.0f };  // what the victims shrugged off
+			int hits{ 0 };
+			int crits{ 0 };
+		};
+
 		// Structured per-combatant result — the stats table renders these
 		// directly (never pre-format to strings; the UI can't sort strings).
 		struct CombatantSummary
@@ -49,7 +60,12 @@ namespace FDNG
 			float healingReceived{ 0.0f };
 			int hitsDealt{ 0 };
 			int critsDealt{ 0 };
-			float timeToDie{ -1.0f };  // first hit taken -> death; -1 when n/a
+			float timeToDie{ -1.0f };               // first hit taken -> death; -1 when n/a
+			std::vector<BreakdownRow> bySource;     // dealt, by weapon/spell, desc
+			std::vector<BreakdownRow> byTarget;     // dealt, by victim, desc
+			std::vector<BreakdownRow> takenByKind;  // taken + mitigated per damage type (resist profile)
+			std::string killedBy;                   // final-blow attacker, when died
+			std::vector<std::string> deathRecap;    // last hits leading to death, formatted
 		};
 
 		// Finished-session record kept for in-game browsing (SMF stats page).
@@ -75,8 +91,10 @@ namespace FDNG
 		// Register the combat/death sinks (call at kDataLoaded).
 		void Register();
 
-		// From Capture (game thread): every classified damage/heal application.
-		void RecordDamage(RE::Actor* a_attacker, RE::Actor* a_victim, float a_amount, DamageKind a_kind, const HitFlags& a_flags);
+		// From Capture (main thread): every classified damage/heal application.
+		// a_sourceID identifies the weapon or magic effect (0 = unarmed/other).
+		void RecordDamage(RE::Actor* a_attacker, RE::Actor* a_victim, float a_amount, DamageKind a_kind, const HitFlags& a_flags,
+			float a_mitigated = 0.0f, RE::FormID a_sourceID = 0);
 		void RecordHeal(RE::Actor* a_target, float a_amount);
 
 		// Called once per frame from the renderer: closes the session once the
@@ -96,6 +114,14 @@ namespace FDNG
 	private:
 		using Clock = std::chrono::steady_clock;
 
+		struct DamageAgg
+		{
+			float total{ 0.0f };
+			float mitigated{ 0.0f };
+			int hits{ 0 };
+			int crits{ 0 };
+		};
+
 		struct Combatant
 		{
 			std::string name;
@@ -108,11 +134,29 @@ namespace FDNG
 			int critsDealt{ 0 };
 			float firstHitTakenAt{ -1.0f };  // session-relative seconds
 			float diedAt{ -1.0f };
+			// Drill-down aggregates (keys resolved to names at session close).
+			std::unordered_map<std::uint64_t, DamageAgg> bySource;  // dealt; key = sourceID | kind<<32
+			std::unordered_map<RE::FormID, DamageAgg> byTarget;     // dealt, per victim
+			std::array<DamageAgg, 9> takenByKind{};                 // indexed by DamageKind
+			RE::FormID killedByID{ 0 };
+			std::vector<std::string> deathRecap;
+		};
+
+		// One damage application, kept briefly for death recaps.
+		struct RecapEvent
+		{
+			float sessionTime{ 0.0f };
+			RE::FormID victimID{ 0 };
+			RE::FormID attackerID{ 0 };
+			RE::FormID sourceID{ 0 };
+			float amount{ 0.0f };
+			DamageKind kind{ DamageKind::kPhysical };
 		};
 
 		void EnsureSession(RE::Actor* a_hint);
 		void CloseSession();
 		void WriteDiskReport(const SessionSummary& a_summary);
+		void BuildDeathRecap(RE::FormID a_victimID, Combatant& a_combatant);
 
 		Combatant& GetCombatant(RE::Actor* a_actor);
 		float SessionSeconds() const;
@@ -152,5 +196,11 @@ namespace FDNG
 		std::mutex _deathLock;
 		std::array<RE::FormID, 32> _deaths{};
 		std::size_t _deathCount{ 0 };
+
+		// Recent damage ring for death recaps (main thread, under _lock).
+		static constexpr std::size_t kRecapCapacity = 128;
+		static constexpr float kRecapWindowSeconds = 10.0f;
+		static constexpr std::size_t kRecapMaxLines = 8;
+		std::deque<RecapEvent> _recentDamage;
 	};
 }

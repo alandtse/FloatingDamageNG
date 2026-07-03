@@ -163,7 +163,7 @@ namespace FDNG
 
 		std::scoped_lock lk{ _lock };
 		_recentMagic[a_event->target->GetFormID()] =
-			RecentMagic{ Clock::now(), kind, caster ? caster->GetFormID() : 0 };
+			RecentMagic{ Clock::now(), kind, caster ? caster->GetFormID() : 0, a_event->magicEffect };
 		return RE::BSEventNotifyControl::kContinue;
 	}
 
@@ -179,10 +179,19 @@ namespace FDNG
 		pending.physicalDamage = a_hitData.physicalDamage;
 		pending.resistedPhysical = std::max(0.0f, a_hitData.resistedPhysicalDamage);
 		pending.resistedTyped = std::max(0.0f, a_hitData.resistedTypedDamage);
+		pending.weaponID = a_hitData.weapon ? a_hitData.weapon->GetFormID() : 0;
 		pending.flags.critical = a_hitData.flags.any(RE::HitData::Flag::kCritical);
 		pending.flags.blocked = a_hitData.flags.any(RE::HitData::Flag::kBlocked);
 		pending.flags.sneak = a_hitData.flags.any(RE::HitData::Flag::kSneakAttack);
 		pending.flags.powerAttack = a_hitData.flags.any(RE::HitData::Flag::kPowerAttack);
+		pending.flags.bash = a_hitData.flags.any(RE::HitData::Flag::kBash, RE::HitData::Flag::kTimedBash);
+
+		// totalDamage is post-block; reconstruct the blocked portion so the
+		// mitigation subtext and analytics carry the true amount.
+		if (pending.flags.blocked) {
+			const float pb = std::clamp(a_hitData.percentBlocked, 0.0f, 0.9f);
+			pending.blockedDamage = a_hitData.totalDamage * pb / (1.0f - pb);
+		}
 
 		// Ranged hits get locational + amplification treatment. The projectile
 		// itself is unreachable from HitData (sourceRef is not the projectile
@@ -225,7 +234,7 @@ namespace FDNG
 		}
 	}
 
-	bool Capture::FindRecentMagic(RE::FormID a_victimID, DamageKind& a_kindOut, RE::Actor*& a_attackerOut)
+	bool Capture::FindRecentMagic(RE::FormID a_victimID, DamageKind& a_kindOut, RE::Actor*& a_attackerOut, RE::FormID* a_mgefOut)
 	{
 		std::scoped_lock lk{ _lock };
 		const auto it = _recentMagic.find(a_victimID);
@@ -234,6 +243,9 @@ namespace FDNG
 		}
 		a_kindOut = it->second.kind;
 		a_attackerOut = it->second.casterID != 0 ? RE::TESForm::LookupByID<RE::Actor>(it->second.casterID) : nullptr;
+		if (a_mgefOut) {
+			*a_mgefOut = it->second.mgefID;
+		}
 		return true;
 	}
 
@@ -365,21 +377,23 @@ namespace FDNG
 			return;
 		}
 
-		// The pending HitData contributes crit/block/sneak flags, mitigation,
-		// hit position, and the amplification estimate.
+		// The pending HitData contributes crit/block/sneak/bash flags,
+		// mitigation, weapon identity, hit position, and the amplification
+		// estimate.
 		HitFlags flags;
 		float mitigated = 0.0f;
 		float ampMult = 0.0f;
 		char location[16]{};
 		auto mitLabel = MitigationLabel::kArmor;
 		bool ranged = false;
+		RE::FormID weaponID = 0;
 		RE::NiPoint3 hitPos;
 		{
 			std::scoped_lock lk{ _lock };
 			if (const auto it = _pendingHits.find(a_raw.victimID);
 				it != _pendingHits.end() && Clock::now() - it->second.stamp < kHitWindow) {
 				flags = it->second.flags;
-				mitigated = it->second.resistedPhysical + it->second.resistedTyped;
+				mitigated = it->second.resistedPhysical + it->second.resistedTyped + it->second.blockedDamage;
 				// Word by dominant cause: a real block > armor soak > the
 				// enchant portion being magically resisted.
 				if (flags.blocked) {
@@ -389,6 +403,7 @@ namespace FDNG
 				}
 				ampMult = it->second.ampMult;
 				ranged = it->second.ranged;
+				weaponID = it->second.weaponID;
 				hitPos = it->second.hitPos;
 				_pendingHits.erase(it);
 			}
@@ -415,7 +430,7 @@ namespace FDNG
 
 		const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
 		AuditRecord(a_raw.victimID, a_raw.amount);
-		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel);
+		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel, weaponID);
 	}
 
 	void Capture::ProcessAVDelta(const RawEvent& a_raw, RE::Actor* a_victim)
@@ -430,10 +445,11 @@ namespace FDNG
 		// exact attribution).
 		DamageKind kind = DamageKind::kPhysical;
 		RE::Actor* attacker = nullptr;
-		FindRecentMagic(a_raw.victimID, kind, attacker);
+		RE::FormID mgefID = 0;
+		FindRecentMagic(a_raw.victimID, kind, attacker, &mgefID);
 
 		AuditRecord(a_raw.victimID, a_raw.amount);
-		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind);
+		EmitPooledDamage(a_victim, attacker, -a_raw.amount, kind, 0.0f, mgefID);
 	}
 
 	void Capture::ProcessEffect(const RawEvent& a_raw, RE::Actor* a_victim)
@@ -468,7 +484,7 @@ namespace FDNG
 				}
 			}
 			AuditRecord(a_raw.victimID, a_raw.amount);
-			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind, mitigated);
+			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind, mitigated, a_raw.mgefID);
 			return;
 		}
 
@@ -482,7 +498,7 @@ namespace FDNG
 				return;
 			}
 			const auto kind = a_raw.av == RE::ActorValue::kMagicka ? DamageKind::kMagickaDrain : DamageKind::kStaminaDrain;
-			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind);
+			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind, 0.0f, a_raw.mgefID);
 		}
 	}
 
@@ -549,7 +565,7 @@ namespace FDNG
 		NumberManager::GetSingleton()->Enqueue(event);
 	}
 
-	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated)
+	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated, RE::FormID a_sourceID)
 	{
 		const auto settings = Settings::GetSingleton();
 
@@ -565,17 +581,17 @@ namespace FDNG
 			}
 		}
 
-		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, emitMitigated);
+		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, emitMitigated, 0.0f, nullptr, MitigationLabel::kResisted, a_sourceID);
 	}
 
 	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
-		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel)
+		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel, RE::FormID a_sourceID)
 	{
 		const auto settings = Settings::GetSingleton();
 		const auto origin = ClassifyOrigin(a_victim, a_attacker);
 
 		// Analytics sees every application, independent of the display filters.
-		CombatLog::GetSingleton()->RecordDamage(a_attacker, a_victim, a_amount, a_kind, a_flags);
+		CombatLog::GetSingleton()->RecordDamage(a_attacker, a_victim, a_amount, a_kind, a_flags, a_mitigated, a_sourceID);
 
 		DamageEvent event;
 		event.victimID = a_victim->GetFormID();

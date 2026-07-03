@@ -14,6 +14,21 @@ namespace FDNG::DevBench
 	{
 		DevBenchAPI::IDevBenchInterface001* g_devbench = nullptr;
 
+		nlohmann::json RowsToJson(const std::vector<CombatLog::BreakdownRow>& a_rows)
+		{
+			auto rows = nlohmann::json::array();
+			for (const auto& r : a_rows) {
+				rows.push_back({
+					{ "name", r.name },
+					{ "total", r.total },
+					{ "mitigated", r.mitigated },
+					{ "hits", r.hits },
+					{ "crits", r.crits },
+				});
+			}
+			return rows;
+		}
+
 		nlohmann::json SummaryToJson(const CombatLog::SessionSummary& a_s)
 		{
 			auto combatants = nlohmann::json::array();
@@ -30,6 +45,11 @@ namespace FDNG::DevBench
 					{ "hits", c.hitsDealt },
 					{ "crits", c.critsDealt },
 					{ "timeToDie", c.timeToDie },
+					{ "bySource", RowsToJson(c.bySource) },
+					{ "byTarget", RowsToJson(c.byTarget) },
+					{ "takenByKind", RowsToJson(c.takenByKind) },
+					{ "killedBy", c.killedBy },
+					{ "deathRecap", c.deathRecap },
 				});
 			}
 			return {

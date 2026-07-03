@@ -58,6 +58,8 @@ namespace FDNG
 			prefix = "CRIT ";
 		} else if (a_number.flags.sneak) {
 			prefix = "SNEAK ";
+		} else if (a_number.flags.bash) {
+			prefix = "BASH ";
 		} else if (a_number.flags.blocked) {
 			prefix = "BLOCK ";
 		}

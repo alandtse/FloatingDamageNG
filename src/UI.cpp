@@ -319,6 +319,90 @@ namespace FDNG::UI
 			ImGuiMCP::EndTable();
 		}
 
+		// A small breakdown table (drill-down rows are pre-sorted by damage).
+		void DrawBreakdownTable(const char* a_id, const char* a_valueHeader,
+			const std::vector<CombatLog::BreakdownRow>& a_rows, bool a_showMitigated)
+		{
+			if (a_rows.empty()) {
+				ImGuiMCP::TextDisabled("none");
+				return;
+			}
+			constexpr auto flags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
+			if (!ImGuiMCP::BeginTable(a_id, a_showMitigated ? 5 : 4, flags, { 0, 0 }, 0.0f)) {
+				return;
+			}
+			float grand = 0.0f;
+			for (const auto& r : a_rows) {
+				grand += r.total;
+			}
+			ImGuiMCP::TableSetupColumn(a_valueHeader, 0, 0.40f, 0);
+			ImGuiMCP::TableSetupColumn("Damage", 0, 0.16f, 0);
+			ImGuiMCP::TableSetupColumn("%", 0, 0.12f, 0);
+			ImGuiMCP::TableSetupColumn("Hits (crit)", 0, 0.16f, 0);
+			if (a_showMitigated) {
+				ImGuiMCP::TableSetupColumn("Resisted", 0, 0.16f, 0);
+			}
+			ImGuiMCP::TableHeadersRow();
+			for (const auto& r : a_rows) {
+				ImGuiMCP::TableNextRow(0, 0.0f);
+				ImGuiMCP::TableSetColumnIndex(0);
+				ImGuiMCP::Text("%s", r.name.c_str());
+				ImGuiMCP::TableSetColumnIndex(1);
+				ImGuiMCP::Text("%.0f", r.total);
+				ImGuiMCP::TableSetColumnIndex(2);
+				ImGuiMCP::Text("%.0f%%", grand > 0.0f ? 100.0f * r.total / grand : 0.0f);
+				ImGuiMCP::TableSetColumnIndex(3);
+				ImGuiMCP::Text("%d (%d)", r.hits, r.crits);
+				if (a_showMitigated) {
+					ImGuiMCP::TableSetColumnIndex(4);
+					if (r.total + r.mitigated > 0.0f && r.mitigated > 0.0f) {
+						ImGuiMCP::Text("%.0f%%", 100.0f * r.mitigated / (r.total + r.mitigated));
+					}
+				}
+			}
+			ImGuiMCP::EndTable();
+		}
+
+		// Per-combatant drill-down: pick a combatant, see their damage by
+		// source and by target, their resist profile, and their death recap.
+		void DrawSessionDrilldown(const CombatLog::SessionSummary& a_session)
+		{
+			if (a_session.combatants.empty()) {
+				return;
+			}
+			static std::unordered_map<int, int> s_selected;  // session index -> combatant index
+			int& sel = s_selected[a_session.index];
+			sel = std::clamp(sel, 0, static_cast<int>(a_session.combatants.size()) - 1);
+
+			std::vector<const char*> names;
+			names.reserve(a_session.combatants.size());
+			for (const auto& c : a_session.combatants) {
+				names.push_back(c.name.c_str());
+			}
+			const auto comboID = std::format("Drill-down###fdng_drill{}", a_session.index);
+			ImGuiMCP::Combo(comboID.c_str(), &sel, names.data(), static_cast<int>(names.size()), -1);
+
+			const auto& c = a_session.combatants[static_cast<std::size_t>(sel)];
+			const auto srcID = std::format("##fdng_src{}", a_session.index);
+			const auto tgtID = std::format("##fdng_tgt{}", a_session.index);
+			const auto kindID = std::format("##fdng_kind{}", a_session.index);
+
+			ImGuiMCP::Text("Damage by source");
+			DrawBreakdownTable(srcID.c_str(), "Weapon / spell", c.bySource, true);
+			ImGuiMCP::Text("Damage by target");
+			DrawBreakdownTable(tgtID.c_str(), "Target", c.byTarget, false);
+			if (!c.takenByKind.empty()) {
+				ImGuiMCP::Text("Damage taken by type (resist profile)");
+				DrawBreakdownTable(kindID.c_str(), "Type", c.takenByKind, true);
+			}
+			if (c.died) {
+				ImGuiMCP::Text("Killed by %s", c.killedBy.c_str());
+				for (const auto& line : c.deathRecap) {
+					ImGuiMCP::BulletText("%s", line.c_str());
+				}
+			}
+		}
+
 		void __stdcall RenderStats()
 		{
 			const auto live = CombatLog::GetSingleton()->GetLiveStats();
@@ -352,6 +436,7 @@ namespace FDNG::UI
 						0, overlay.c_str(), 0.0f, FLT_MAX, { -1.0f, 80.0f }, sizeof(float));
 				}
 				DrawCombatantTable(s);
+				DrawSessionDrilldown(s);
 			}
 		}
 	}

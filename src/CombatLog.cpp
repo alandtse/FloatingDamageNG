@@ -42,6 +42,53 @@ namespace FDNG
 			const auto now = std::chrono::system_clock::now();
 			return std::format("{:%Y-%m-%d %H:%M:%S}", std::chrono::floor<std::chrono::seconds>(now));
 		}
+
+		const char* KindName(DamageKind a_kind)
+		{
+			switch (a_kind) {
+			case DamageKind::kFire:
+				return "fire";
+			case DamageKind::kFrost:
+				return "frost";
+			case DamageKind::kShock:
+				return "shock";
+			case DamageKind::kPoison:
+				return "poison";
+			case DamageKind::kMagic:
+				return "magic";
+			case DamageKind::kHealing:
+				return "healing";
+			case DamageKind::kMagickaDrain:
+				return "magicka drain";
+			case DamageKind::kStaminaDrain:
+				return "stamina drain";
+			default:
+				return "physical";
+			}
+		}
+
+		// Weapon/spell display name for a source key; falls back to the kind.
+		std::string SourceName(RE::FormID a_sourceID, DamageKind a_kind)
+		{
+			if (a_sourceID != 0) {
+				if (const auto form = RE::TESForm::LookupByID(a_sourceID)) {
+					if (const char* name = form->GetName(); name && name[0]) {
+						return name;
+					}
+				}
+			}
+			return a_kind == DamageKind::kPhysical ? "Unarmed/other" : KindName(a_kind);
+		}
+
+		std::string ActorNameByID(RE::FormID a_id)
+		{
+			if (const auto actor = a_id ? RE::TESForm::LookupByID<RE::Actor>(a_id) : nullptr) {
+				if (const char* name = actor->GetName(); name && name[0]) {
+					return name;
+				}
+			}
+			return std::format("<{:08X}>", a_id);
+		}
 	}
 
 	CombatLog* CombatLog::GetSingleton()
@@ -102,6 +149,7 @@ namespace FDNG
 		_lastDamageAt = _sessionStart;
 		_location = location;
 		_combatants.clear();
+		_recentDamage.clear();
 		_playerDamage = 0.0f;
 		_playerActiveSeconds = 0.0f;
 		_lastPlayerHitAt = -1.0f;
@@ -110,7 +158,8 @@ namespace FDNG
 		logger::info("Combat session #{} started @ {}", _sessionIndex, _location);
 	}
 
-	void CombatLog::RecordDamage(RE::Actor* a_attacker, RE::Actor* a_victim, float a_amount, DamageKind, const HitFlags& a_flags)
+	void CombatLog::RecordDamage(RE::Actor* a_attacker, RE::Actor* a_victim, float a_amount, DamageKind a_kind, const HitFlags& a_flags,
+		float a_mitigated, RE::FormID a_sourceID)
 	{
 		if (!Settings::GetSingleton()->enableCombatLog || !a_victim) {
 			return;
@@ -124,10 +173,24 @@ namespace FDNG
 		_lastDamageAt = Clock::now();
 
 		const auto now = SessionSeconds();
+		const auto kindIdx = static_cast<std::size_t>(std::to_underlying(a_kind));
 		auto& victim = GetCombatant(a_victim);
 		victim.damageTaken += a_amount;
+		if (kindIdx < victim.takenByKind.size()) {
+			victim.takenByKind[kindIdx].total += a_amount;
+			victim.takenByKind[kindIdx].mitigated += a_mitigated;
+			++victim.takenByKind[kindIdx].hits;
+		}
 		if (victim.firstHitTakenAt < 0.0f) {
 			victim.firstHitTakenAt = now;
+		}
+
+		// Death recap ring: what hit whom, kept just long enough to explain
+		// a death when the death event lands.
+		_recentDamage.push_back({ now, a_victim->GetFormID(),
+			a_attacker ? a_attacker->GetFormID() : 0, a_sourceID, a_amount, a_kind });
+		while (_recentDamage.size() > kRecapCapacity) {
+			_recentDamage.pop_front();
 		}
 
 		if (a_attacker) {
@@ -136,6 +199,20 @@ namespace FDNG
 			++attacker.hitsDealt;
 			if (a_flags.critical) {
 				++attacker.critsDealt;
+			}
+
+			auto& source = attacker.bySource[static_cast<std::uint64_t>(a_sourceID) | (static_cast<std::uint64_t>(kindIdx) << 32)];
+			source.total += a_amount;
+			source.mitigated += a_mitigated;
+			++source.hits;
+			if (a_flags.critical) {
+				++source.crits;
+			}
+			auto& target = attacker.byTarget[a_victim->GetFormID()];
+			target.total += a_amount;
+			++target.hits;
+			if (a_flags.critical) {
+				++target.crits;
 			}
 
 			if (a_attacker == RE::PlayerCharacter::GetSingleton()) {
@@ -223,6 +300,7 @@ namespace FDNG
 		for (std::size_t i = 0; i < deathCount; ++i) {
 			if (const auto it = _combatants.find(deaths[i]); it != _combatants.end()) {
 				it->second.diedAt = SessionSeconds();
+				BuildDeathRecap(deaths[i], it->second);
 			}
 		}
 
@@ -237,6 +315,26 @@ namespace FDNG
 		// alive even though the player never enters combat.
 		if (!playerInCombat && now - _lastDamageAt > kIdleClose) {
 			CloseSession();
+		}
+	}
+
+	void CombatLog::BuildDeathRecap(RE::FormID a_victimID, Combatant& a_combatant)
+	{
+		// _lock held (Tick). Walk the recent-damage ring for the fatal window;
+		// the last matching event is the killing blow.
+		const float diedAt = a_combatant.diedAt;
+		for (const auto& ev : _recentDamage) {
+			if (ev.victimID != a_victimID || diedAt - ev.sessionTime > kRecapWindowSeconds) {
+				continue;
+			}
+			a_combatant.killedByID = ev.attackerID;
+			a_combatant.deathRecap.push_back(std::format("{:.1f}s before death: {:.0f} {} from {} ({})",
+				std::max(diedAt - ev.sessionTime, 0.0f), ev.amount, KindName(ev.kind),
+				ev.attackerID ? ActorNameByID(ev.attackerID) : "the world",
+				SourceName(ev.sourceID, ev.kind)));
+			if (a_combatant.deathRecap.size() > kRecapMaxLines) {
+				a_combatant.deathRecap.erase(a_combatant.deathRecap.begin());
+			}
 		}
 	}
 
@@ -296,6 +394,39 @@ namespace FDNG
 			if (cs.died && c.firstHitTakenAt >= 0.0f) {
 				cs.timeToDie = c.diedAt - c.firstHitTakenAt;
 			}
+
+			// Drill-down rows, names resolved now (main thread, session over).
+			for (const auto& [key, agg] : c.bySource) {
+				const auto srcID = static_cast<RE::FormID>(key & 0xFFFFFFFF);
+				const auto kind = static_cast<DamageKind>(key >> 32);
+				cs.bySource.push_back({ SourceName(srcID, kind), kind, agg.total, agg.mitigated, agg.hits, agg.crits });
+			}
+			for (const auto& [victimID, agg] : c.byTarget) {
+				const auto it = _combatants.find(victimID);
+				cs.byTarget.push_back({ it != _combatants.end() ? it->second.name : ActorNameByID(victimID),
+					DamageKind::kPhysical, agg.total, agg.mitigated, agg.hits, agg.crits });
+			}
+			for (std::size_t k = 0; k < c.takenByKind.size(); ++k) {
+				if (const auto& agg = c.takenByKind[k]; agg.total > 0.0f || agg.mitigated > 0.0f) {
+					cs.takenByKind.push_back({ KindName(static_cast<DamageKind>(k)),
+						static_cast<DamageKind>(k), agg.total, agg.mitigated, agg.hits, agg.crits });
+				}
+			}
+			const auto byTotal = [](const BreakdownRow& a, const BreakdownRow& b) { return a.total > b.total; };
+			std::sort(cs.bySource.begin(), cs.bySource.end(), byTotal);
+			std::sort(cs.byTarget.begin(), cs.byTarget.end(), byTotal);
+			std::sort(cs.takenByKind.begin(), cs.takenByKind.end(), byTotal);
+			constexpr std::size_t kMaxRows = 12;
+			if (cs.bySource.size() > kMaxRows) {
+				cs.bySource.resize(kMaxRows);
+			}
+			if (cs.byTarget.size() > kMaxRows) {
+				cs.byTarget.resize(kMaxRows);
+			}
+			if (cs.died) {
+				cs.killedBy = c.killedByID ? ActorNameByID(c.killedByID) : "the world";
+				cs.deathRecap = c.deathRecap;
+			}
 			summary.combatants.push_back(std::move(cs));
 		}
 		std::sort(summary.combatants.begin(), summary.combatants.end(),
@@ -338,7 +469,8 @@ namespace FDNG
 		for (const auto& c : a_summary.combatants) {
 			std::string fate;
 			if (c.died) {
-				fate = c.timeToDie >= 0.0f ? std::format(" — died (TTD {:.1f}s)", c.timeToDie) : " — died";
+				fate = c.timeToDie >= 0.0f ? std::format(" — died (TTD {:.1f}s, by {})", c.timeToDie, c.killedBy) :
+				                             std::format(" — died (by {})", c.killedBy);
 			} else if (c.fled) {
 				fate = " — survived/fled";
 			}
