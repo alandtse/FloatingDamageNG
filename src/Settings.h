@@ -59,7 +59,7 @@ namespace FDNG
 		// fill color always encodes the damage kind, so origin uses a
 		// secondary channel in the relationship colors below.
 		OriginStyle originStyle{ OriginStyle::kOutline };
-		float styleThickness{ 2.0f };  // outline / underline / box border, panel px
+		float styleThickness{ 4.0f };  // outline / underline / box border, panel px
 
 		// [Colors] 0xRRGGBB (alpha applied at draw time)
 		std::uint32_t colorPhysical{ 0xFF3B30 };

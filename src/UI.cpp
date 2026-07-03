@@ -229,7 +229,7 @@ namespace FDNG::UI
 				ImGuiMCP::Checkbox("Write sessions to disk", &s->writeLogToDisk);
 				Tip("Appends session reports to FloatingDamageNG-combat.log next to your SKSE logs (rotated at 5 MB).");
 				ImGuiMCP::Checkbox("Live DPS readout", &s->enableLiveDPSWindow);
-				Tip("Small top-right overlay during combat. Flat screen only.");
+				Tip("Small combat overlay: top-right on flat, head-locked HUD plane in VR.");
 				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);
 				if (ImGuiMCP::Checkbox("devbench integration", &s->enableDevBench) && s->enableDevBench) {
 					DevBench::Connect();

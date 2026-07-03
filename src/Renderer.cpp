@@ -15,6 +15,7 @@ namespace FDNG::Renderer
 	namespace
 	{
 		ImGuiVRHelperPluginAPI::Client g_vrClient;
+		ImGuiVRHelperPluginAPI::Client g_vrHudClient;  // head-locked HUD plane (live DPS readout)
 
 		std::atomic<bool> g_initialized{ false };
 		ID3D11Device* g_d3dDevice = nullptr;
@@ -539,6 +540,16 @@ namespace FDNG::Renderer
 					if (!g_resolved.empty()) {
 						g_vrClient.SubmitWorldQuads(g_quads.data(), g_quads.size());
 					}
+
+					// The head-locked HUD plane renders every frame it exists;
+					// DrawLiveDPSWindow gates itself on the settings, leaving
+					// the panel transparent when disabled.
+					if (g_vrHudClient.IsConnected()) {
+						g_vrHudClient.RenderHud(g_d3dDevice, g_d3dContext, displaySize, []() {
+							GImGui->NavWindowingTarget = nullptr;
+							DrawLiveDPSWindow();
+						});
+					}
 				} else {
 					NumberManager::GetSingleton()->Update(g_resolved);
 					ProjectResolved();
@@ -586,6 +597,14 @@ namespace FDNG::Renderer
 		// Load the damage font into the helper-owned HUD context when it is
 		// created, so panel text rasterizes from real TTF outlines.
 		g_vrClient.SetHudStyleCallback([]() { Fonts::Load(); });
+
+		// Second client for head-locked flat HUD content (the live DPS
+		// readout): the world-quad client's panel is consumed as a quad
+		// atlas, so anything meant for a vanilla-HUD-style plane needs its
+		// own kClientFlag_HUDMode panel.
+		if (!g_vrHudClient.Connect("FloatingDamageNG-HUD", FDNG_VERSION_STRING, ImGuiVRHelperPluginAPI::kClientFlag_HUDMode)) {
+			logger::warn("HUD-mode client registration failed — live DPS readout unavailable in VR.");
+		}
 	}
 
 	void Install()
