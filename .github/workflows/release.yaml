@@ -96,11 +96,16 @@ jobs:
           set -euo pipefail
           tag="${{ needs.semantic-release.outputs.new_release_git_tag }}"
           stage="FloatingDamageNG-${tag}"
-          # User archive ships only the plugin; docs/license live in the repo and
-          # the GitHub Release page, and the LGPL client API is consumed via source
-          # (FetchContent), not from the Nexus download.
+          # Archive = the built plugin plus the loose data it loads at runtime:
+          # the shipped motion presets (Arc/Radial/Fireworks/FD-mode homages —
+          # only Float is compiled in) and the drop-in folder READMEs. The INI
+          # stays out on purpose: it is menu-managed, so keeping it out of the
+          # archive means a reinstall/update never clobbers a user's config (the
+          # documented template lives in the repo / GitHub Release). Docs/license
+          # live in the repo too; the LGPL client API is source (FetchContent).
           mkdir -p "$stage/SKSE/Plugins"
           cp bin/FloatingDamageNG.dll bin/FloatingDamageNG.pdb "$stage/SKSE/Plugins/"
+          cp -r "Skyrim/Data/SKSE/Plugins/FloatingDamageNG" "$stage/SKSE/Plugins/"
           7z a -t7z -mx=9 "${stage}.7z" "$stage"
           echo "archive=${stage}.7z" >> "$GITHUB_OUTPUT"
           echo "Built ${stage}.7z:"
