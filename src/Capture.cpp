@@ -44,7 +44,7 @@ namespace FDNG
 		}
 
 		// Nearest named skeleton node to the engine's hit position (main
-		// thread, victim loaded) — how the hit location is identified since
+		// thread, victim loaded) - how the hit location is identified since
 		// HitData carries no projectile reference.
 		const RE::NiAVObject* FindClosestNode(RE::NiAVObject* a_root, const RE::NiPoint3& a_pos, float& a_bestDistSq)
 		{
@@ -154,7 +154,7 @@ namespace FDNG
 		}
 		const auto kind = ClassifyMagicKind(mgef);
 		if (kind == DamageKind::kMagic && mgef->data.primaryAV != RE::ActorValue::kHealth) {
-			// Untyped and not health-targeting — not useful for attribution.
+			// Untyped and not health-targeting - not useful for attribution.
 			return RE::BSEventNotifyControl::kContinue;
 		}
 
@@ -196,7 +196,7 @@ namespace FDNG
 		// Ranged hits get locational + amplification treatment. The projectile
 		// itself is unreachable from HitData (sourceRef is not the projectile
 		// on current runtimes), so location is resolved later from hitPosition
-		// against the victim's skeleton — ALD's fallback approach.
+		// against the victim's skeleton - ALD's fallback approach.
 		const auto settings = Settings::GetSingleton();
 		pending.hitPos = a_hitData.hitPosition;
 		pending.ranged = a_hitData.weapon &&
@@ -209,7 +209,7 @@ namespace FDNG
 		if (pending.ranged && settings->showAmplification) {
 			// Locational mods scale totalDamage but not physicalDamage, so a
 			// total exceeding the physical+crit baseline implies an external
-			// multiplier. Heuristic — display styling only.
+			// multiplier. Heuristic - display styling only.
 			const float critMult = pending.flags.critical ? std::max(a_hitData.criticalDamageMult, 1.0f) : 1.0f;
 			const float baseline = a_hitData.physicalDamage * critMult;
 			if (baseline > 0.1f) {
@@ -307,7 +307,7 @@ namespace FDNG
 		RawEvent raw;
 		raw.source = RawEvent::Source::kEffect;
 		// The engine often passes kNone here and applies to the effect's own
-		// AV — resolve from the member in that case (plain read, safe here).
+		// AV - resolve from the member in that case (plain read, safe here).
 		raw.av = a_actorValue != RE::ActorValue::kNone ? a_actorValue : a_effect->actorValue;
 		raw.victimID = a_target->GetFormID();
 		raw.amount = a_value;
@@ -464,7 +464,7 @@ namespace FDNG
 				return;
 			}
 			if (a_raw.amount == 0.0f) {
-				// Zero-value applies are NOT a reliable full-resist signal —
+				// Zero-value applies are NOT a reliable full-resist signal -
 				// they occur for unrelated reasons and produced spurious
 				// RESISTED tags. Immune targets suppress the effect earlier
 				// in the pipeline instead; drop these.
@@ -492,7 +492,7 @@ namespace FDNG
 			((a_raw.av == RE::ActorValue::kMagicka && settings->showMagickaDamage) ||
 				(a_raw.av == RE::ActorValue::kStamina && settings->showStaminaDamage))) {
 			// Hostile-only: self costs never come through effects, but
-			// beneficial effects with resource costs do — require a
+			// beneficial effects with resource costs do - require a
 			// detrimental effect from someone else.
 			if (!mgef || !(mgef->IsHostile() || mgef->IsDetrimental()) || !caster || caster == a_victim) {
 				return;
@@ -677,7 +677,7 @@ namespace FDNG
 				const float observedNet = health - entry.lastHealth;
 				const float floorNet = entry.capturedNet;
 				if (observedNet < floorNet - 5.0f) {
-					logger::warn("[audit] '{}' [{:08X}]: observed {:+.1f} hp vs captured {:+.1f} — ~{:.1f} damage NOT captured",
+					logger::warn("[audit] '{}' [{:08X}]: observed {:+.1f} hp vs captured {:+.1f} - ~{:.1f} damage NOT captured",
 						actor->GetName(), it->first, observedNet, floorNet, floorNet - observedNet);
 				}
 			}

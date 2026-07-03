@@ -18,7 +18,7 @@ In VR the numbers are real 3D billboards at the target's position, rendered thro
 [/list][/color]
 
 [size=4][b]Requirements[/b][/size]
-[size=3][color=#D4D4D8]SE/AE: SKSE64 + Address Library. VR: SKSE VR + VR Address Library + [url=https://github.com/alandtse/imgui-vr-helper]ImGuiVRHelper[/url] 1.5+ (without it, numbers stay off in VR rather than falling back to a flat overlay). Optional: [url=https://github.com/alandtse/SKSE-Menu-Framework-3]SKSE Menu Framework[/url] for the in-game settings panel (color pickers, sliders) and combat-stats browser with DPS graphs.
+[size=3][color=#D4D4D8]SE/AE: SKSE64 + Address Library. VR: SKSE VR + VR Address Library + [url=https://github.com/alandtse/imgui-vr-helper]ImGuiVRHelper[/url] 1.5+ (without it, numbers stay off in VR rather than falling back to a flat overlay). Optional: [url=https://github.com/alandtse/SKSE-Menu-Framework-3]SKSE Menu Framework[/url] for the in-game settings panel (color pickers, sliders, live style preview) and the combat-stats browser (DPS graphs, sortable tables, drill-downs, death recaps). Optional: [url=https://github.com/alandtse/devbench]devbench[/url] — when installed and enabled (off by default), combat stats are queryable over local MCP/REST for external tooling.
 
 Source and issue tracker on the [url=https://github.com/alandtse/FloatingDamageNG]GitHub repository[/url] — bug reports with your FloatingDamageNG.log (and crash log if applicable) are the most useful thing you can send.[/color][/size]
 

@@ -31,7 +31,7 @@ namespace FDNG::Renderer
 		// World size of one panel pixel on a billboard (matches FloatingSubtitles' tuning).
 		constexpr float kWorldMetersPerPanelPixel = 0.0016875f;
 		// Quads are physically sized, so beyond the reference distance their
-		// angular size drops below HMD readability (an NPC number is ~5 cm —
+		// angular size drops below HMD readability (an NPC number is ~5 cm -
 		// arc-minutes at a 20 m brawl). Grow them with distance, capped so a
 		// far skirmish reads as a hint rather than a billboard wall.
 		constexpr float kQuadRefDistanceMeters = 3.5f;
@@ -86,7 +86,7 @@ namespace FDNG::Renderer
 		}
 
 		// The origin marker color encodes who's involved (relationship
-		// palette; user-themable) — the fill hue is reserved for the damage
+		// palette; user-themable) - the fill hue is reserved for the damage
 		// kind, so origin must not repurpose it.
 		ImU32 RgbWithAlpha(std::uint32_t a_rgb, std::uint8_t a_alpha)
 		{
@@ -149,8 +149,8 @@ namespace FDNG::Renderer
 			// kOutline: the origin color IS the text outline. Underline/box
 			// keep a thin black outline for legibility and draw the origin
 			// marker as a separate shape. The marker (ring included) must stay
-			// inside the returned extent — in VR anything outside it falls off
-			// the quad — so the metrics pad for the current style.
+			// inside the returned extent - in VR anything outside it falls off
+			// the quad - so the metrics pad for the current style.
 			const bool outlineStyle = settings->originStyle == OriginStyle::kOutline;
 			const ImU32 textOutline = outlineStyle ? origin : IM_COL32(0, 0, 0, alpha);
 			const float textThickness = outlineStyle ? thickness : 1.0f;
@@ -184,9 +184,9 @@ namespace FDNG::Renderer
 			return { blockSz.x + 2.0f * metrics.padX, metrics.padTop + blockSz.y + metrics.padBottom };
 		}
 
-		// Shared camera pass (flat and VR — the VR camera tracks the HMD):
+		// Shared camera pass (flat and VR - the VR camera tracks the HMD):
 		// fills each resolved number's normalized screen coords, whether it
-		// projects in front of the camera, and — for NPC-on-NPC numbers — an
+		// projects in front of the camera, and - for NPC-on-NPC numbers - an
 		// in-view flag with a 30% margin so head/camera motion doesn't pop
 		// numbers at the edge. Player-relevant numbers always count as in
 		// view: the renderers re-anchor them in first person, so their
@@ -249,7 +249,7 @@ namespace FDNG::Renderer
 			// Panel space is finite and busy battles overflow it, so pack in
 			// priority order: numbers actually in view first, then the
 			// player's own numbers, then NPC-on-NPC nearest-first.
-			// Out-of-view numbers still pack while space remains — they only
+			// Out-of-view numbers still pack while space remains - they only
 			// lose when something visible needs the room.
 			const auto anchorPos = player ? player->GetPosition() : RE::NiPoint3{};
 			std::sort(g_resolved.begin(), g_resolved.end(), [&](const ResolvedNumber& a, const ResolvedNumber& b) {
@@ -447,7 +447,7 @@ namespace FDNG::Renderer
 					g_d3dDevice = device;
 					g_d3dContext = context;
 					g_initialized.store(true);
-					logger::info("D3D captured — VR world-quad rendering via ImGuiVRHelper.");
+					logger::info("D3D captured - VR world-quad rendering via ImGuiVRHelper.");
 				} else {
 					ImGui::CreateContext();
 					auto& io = ImGui::GetIO();
@@ -469,7 +469,7 @@ namespace FDNG::Renderer
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
-		// RE::HUDMenu::PostDisplay — per-frame draw entry point.
+		// RE::HUDMenu::PostDisplay - per-frame draw entry point.
 		struct PostDisplay
 		{
 			static void thunk(RE::IMenu* a_menu)
@@ -480,7 +480,7 @@ namespace FDNG::Renderer
 					return;
 				}
 
-				// Drain the raw hook queue on the main thread — the hooks fire
+				// Drain the raw hook queue on the main thread - the hooks fire
 				// on job/script threads and only capture POD.
 				Capture::GetSingleton()->ProcessQueued();
 				CombatLog::GetSingleton()->Tick();
@@ -558,7 +558,7 @@ namespace FDNG::Renderer
 			return;
 		}
 		if (!g_vrClient.Connect("FloatingDamageNG", FDNG_VERSION_STRING, ImGuiVRHelperPluginAPI::kClientFlag_WorldQuad)) {
-			logger::warn("ImGuiVRHelper not found or registration failed — floating damage disabled in VR.");
+			logger::warn("ImGuiVRHelper not found or registration failed - floating damage disabled in VR.");
 			return;
 		}
 		logger::info("Connected to ImGuiVRHelper (world quads supported: {}).", g_vrClient.HasWorldQuads());
@@ -576,7 +576,7 @@ namespace FDNG::Renderer
 			// readout would rasterize in ImGui's 13 px embedded font.
 			g_vrHudClient.SetHudStyleCallback([]() { Fonts::Load(); });
 		} else {
-			logger::warn("HUD-mode client registration failed — live DPS readout unavailable in VR.");
+			logger::warn("HUD-mode client registration failed - live DPS readout unavailable in VR.");
 		}
 	}
 
