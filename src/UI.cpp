@@ -192,6 +192,8 @@ namespace FDNG::UI
 				ImGuiMCP::SliderFloat("Big hits grow by", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
 				Tip("How much larger high-damage numbers render (logarithmic in the damage). 0 = all numbers equal size.");
 				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
+				ImGuiMCP::Checkbox("Abbreviate big numbers", &s->abbreviateNumbers);
+				Tip("Show 10000+ as 1.2k / 3.4M to keep late-game numbers compact.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Motion effect", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -230,6 +232,11 @@ namespace FDNG::UI
 					Tip("Rotate: degrees each successive number turns around the target. Diagonal: launch tilt above horizontal.");
 				}
 
+				ImGuiMCP::Checkbox("Squash and stretch", &s->squashStretch);
+				Tip("Distort numbers vertically while they fly fast, easing to normal as they settle (launch juice).");
+				if (s->squashStretch) {
+					ImGuiMCP::SliderFloat("Stretch amount", &s->stretchIntensity, 0.0f, 1.0f, "%.2f", 0);
+				}
 				ImGuiMCP::SliderFloat("Speed", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
 				ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
 			}
@@ -239,9 +246,22 @@ namespace FDNG::UI
 				ImGuiMCP::SliderFloat("Offset toward you", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
 				ImGuiMCP::SliderFloat("Offset sideways", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
 				Tip("Shift where numbers spawn relative to the target's head, in a view-relative frame (game units).");
-				if (ImGuiMCP::Checkbox("Live preview on target", &s->previewMode)) {
+				ImGuiMCP::Checkbox("Live preview", &s->previewMode);
+				Tip("Spawns sample numbers on your target so you can tune motion/offset/font live.");
+				if (s->previewMode) {
+					// Show what the preview is currently landing on (console
+					// selection via prid, else the player).
+					const char* target = "you (no target selected)";
+					if (const auto sel = RE::Console::GetSelectedRef()) {
+						if (const char* nm = sel->GetName(); nm && nm[0]) {
+							target = nm;
+						} else {
+							target = "selected reference";
+						}
+					}
+					ImGuiMCP::Text("Previewing on: %s", target);
+					ImGuiMCP::TextDisabled("Open the console and click an NPC (or 'prid <FormID>') to target it.");
 				}
-				Tip("Spawns sample numbers on your console-selected target (open the console and click an NPC, or 'prid <id>'); falls back to you. Tune motion/offset/font and watch it live.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Thresholds", 0)) {

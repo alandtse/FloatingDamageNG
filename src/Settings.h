@@ -78,6 +78,11 @@ namespace FDNG
 		float baseFontScale{ 1.0f };
 		float logScaleModifier{ 0.25f };
 		float maxFontScaleCeiling{ 1.6f };
+		bool abbreviateNumbers{ false };  // 1234 -> 1.2k, 3400000 -> 3.4M
+		// Squash-and-stretch: distort the number vertically while it moves
+		// fast, easing to normal as it slows (launch "juice"). Opt-in.
+		bool squashStretch{ false };
+		float stretchIntensity{ 0.5f };
 
 		// [KinematicProfiles] — the active spawn effect (a preset copied here,
 		// then freely tuned).

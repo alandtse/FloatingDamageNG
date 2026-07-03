@@ -66,6 +66,9 @@ namespace FDNG
 		baseFontScale = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale));
 		logScaleModifier = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier));
 		maxFontScaleCeiling = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling));
+		abbreviateNumbers = ini.GetBoolValue("DynamicSizing", "bAbbreviateNumbers", abbreviateNumbers);
+		squashStretch = ini.GetBoolValue("DynamicSizing", "bSquashStretch", squashStretch);
+		stretchIntensity = std::clamp(static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fStretchIntensity", stretchIntensity)), 0.0f, 1.0f);
 
 		// Seed the active motion path from the last-applied preset, then let
 		// explicit fields override — so a legacy INI (preset index only) still
@@ -191,6 +194,9 @@ namespace FDNG
 		ini.SetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale);
 		ini.SetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier);
 		ini.SetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling);
+		ini.SetBoolValue("DynamicSizing", "bAbbreviateNumbers", abbreviateNumbers);
+		ini.SetBoolValue("DynamicSizing", "bSquashStretch", squashStretch);
+		ini.SetDoubleValue("DynamicSizing", "fStretchIntensity", stretchIntensity);
 
 		ini.SetValue("Font", "sFontPath", fontPath.c_str());
 

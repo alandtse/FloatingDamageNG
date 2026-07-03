@@ -123,8 +123,27 @@ namespace FDNG::Renderer
 			a_drawList->AddText(a_font, a_size, a_pos, a_color, a_text);
 		}
 
-		// Draw one number (text + optional mitigation subtext) centered at
-		// a_center.x, starting at a_center.y. Returns the block size drawn.
+		// Squash-and-stretch scale for one number: stretch vertically while it
+		// travels fast (from the motion profile at its current age), easing to
+		// 1:1 as it slows. (1,1) when disabled.
+		ImVec2 StretchScale(const Number& a_n)
+		{
+			const auto settings = Settings::GetSingleton();
+			if (!settings->squashStretch) {
+				return { 1.0f, 1.0f };
+			}
+			const auto& m = settings->motion;
+			const float t = a_n.age * settings->globalSpeedMultiplier;
+			const float vy = m.riseSpeed + m.riseAccel * t;
+			const float vlat = m.lateralDamping > 0.001f ? m.lateralSpeed * std::exp(-m.lateralDamping * t) : m.lateralSpeed;
+			const float speed = std::sqrt(vy * vy + vlat * vlat) * settings->globalSpeedMultiplier;
+			constexpr float kRefSpeed = 130.0f;
+			const float k = std::clamp(speed / kRefSpeed, 0.0f, 1.0f) * settings->stretchIntensity;
+			return { 1.0f - 0.30f * k, 1.0f + 0.55f * k };  // squash x, stretch y
+		}
+
+		// Draw one number (text + optional mitigation subtext). Returns the
+		// block extent drawn (including origin marker + any stretch headroom).
 		ImVec2 DrawNumberBlock(ImDrawList* a_drawList, const ResolvedNumber& a_rn, ImVec2 a_topLeft, float a_fontPx)
 		{
 			const auto& n = *a_rn.number;
@@ -147,16 +166,23 @@ namespace FDNG::Renderer
 			const ImU32 origin = OriginColor(n.origin, alpha);
 			const float thickness = settings->styleThickness;
 
-			// kOutline: the origin color IS the text outline. Underline/box
-			// keep a thin black outline for legibility and draw the origin
-			// marker as a separate shape. The marker (ring included) must stay
-			// inside the returned extent - in VR anything outside it falls off
-			// the quad - so the metrics pad for the current style.
 			const bool outlineStyle = settings->originStyle == OriginStyle::kOutline;
 			const ImU32 textOutline = outlineStyle ? origin : IM_COL32(0, 0, 0, alpha);
 			const float textThickness = outlineStyle ? thickness : 1.0f;
 			const auto metrics = ComputeStyleMetrics(settings->originStyle, thickness);
-			const ImVec2 content{ a_topLeft.x + metrics.padX, a_topLeft.y + metrics.padTop };
+
+			// Base block, then reserve stretch headroom so the VR quad (which
+			// samples this exact rect) never clips the enlarged pixels. The
+			// content is drawn centered in the reserved rect and the emitted
+			// vertices are scaled about that center afterward.
+			const ImVec2 baseExtent{ blockSz.x + 2.0f * metrics.padX, metrics.padTop + blockSz.y + metrics.padBottom };
+			const ImVec2 st = StretchScale(n);
+			const ImVec2 extent{ baseExtent.x * std::max(st.x, 1.0f), baseExtent.y * std::max(st.y, 1.0f) };
+			const ImVec2 shift{ (extent.x - baseExtent.x) * 0.5f, (extent.y - baseExtent.y) * 0.5f };
+			const ImVec2 origin2{ a_topLeft.x + shift.x, a_topLeft.y + shift.y };  // base top-left inside reserved rect
+			const ImVec2 content{ origin2.x + metrics.padX, origin2.y + metrics.padTop };
+
+			const int vtxStart = a_drawList->VtxBuffer.Size;
 
 			AddOutlinedText(a_drawList, font, mainPx,
 				ImVec2(content.x + (blockSz.x - mainSz.x) * 0.5f, content.y), color, textOutline, textThickness, n.text);
@@ -175,14 +201,25 @@ namespace FDNG::Renderer
 				break;
 			case OriginStyle::kBox:
 				a_drawList->AddRect(
-					ImVec2(a_topLeft.x + thickness * 0.5f, a_topLeft.y + thickness * 0.5f),
-					ImVec2(a_topLeft.x + blockSz.x + 2.0f * metrics.padX - thickness * 0.5f, a_topLeft.y + metrics.padTop + blockSz.y + metrics.padBottom - thickness * 0.5f),
+					ImVec2(origin2.x + thickness * 0.5f, origin2.y + thickness * 0.5f),
+					ImVec2(origin2.x + blockSz.x + 2.0f * metrics.padX - thickness * 0.5f, origin2.y + metrics.padTop + blockSz.y + metrics.padBottom - thickness * 0.5f),
 					origin, 3.0f, 0, thickness);
 				break;
 			default:
 				break;
 			}
-			return { blockSz.x + 2.0f * metrics.padX, metrics.padTop + blockSz.y + metrics.padBottom };
+
+			if (st.x != 1.0f || st.y != 1.0f) {
+				// Anisotropic scale about the reserved-rect center (ImGui text
+				// draws uniformly, so squash-stretch is a post-transform).
+				const ImVec2 c{ a_topLeft.x + extent.x * 0.5f, a_topLeft.y + extent.y * 0.5f };
+				for (int i = vtxStart; i < a_drawList->VtxBuffer.Size; ++i) {
+					auto& v = a_drawList->VtxBuffer[i].pos;
+					v.x = c.x + (v.x - c.x) * st.x;
+					v.y = c.y + (v.y - c.y) * st.y;
+				}
+			}
+			return extent;
 		}
 
 		// Shared camera pass (flat and VR - the VR camera tracks the HMD):

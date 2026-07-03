@@ -41,9 +41,28 @@ namespace FDNG
 		}
 	}
 
+	namespace
+	{
+		// "1234" -> "1.2k", "3400000" -> "3.4M" when enabled; plain otherwise.
+		void FormatMagnitude(char* a_out, std::size_t a_cap, int a_value, bool a_abbrev)
+		{
+			if (a_abbrev && a_value >= 10000) {
+				if (a_value >= 1000000) {
+					std::snprintf(a_out, a_cap, "%.1fM", static_cast<double>(a_value) / 1000000.0);
+				} else {
+					std::snprintf(a_out, a_cap, "%.1fk", static_cast<double>(a_value) / 1000.0);
+				}
+			} else {
+				std::snprintf(a_out, a_cap, "%d", a_value);
+			}
+		}
+	}
+
 	void NumberManager::BuildText(Number& a_number) const
 	{
 		const auto rounded = std::max(1, static_cast<int>(std::lround(a_number.amount)));
+		char num[16]{};
+		FormatMagnitude(num, sizeof(num), rounded, Settings::GetSingleton()->abbreviateNumbers);
 		const char* prefix = "";
 		char locPrefix[20]{};
 		if (a_number.kind == DamageKind::kHealing) {
@@ -60,7 +79,7 @@ namespace FDNG
 		} else if (a_number.flags.blocked) {
 			prefix = "BLOCK ";
 		}
-		std::snprintf(a_number.text, sizeof(a_number.text), "%s%d", prefix, rounded);
+		std::snprintf(a_number.text, sizeof(a_number.text), "%s%s", prefix, num);
 
 		a_number.subtext[0] = '\0';
 		const auto settings = Settings::GetSingleton();
