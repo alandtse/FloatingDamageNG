@@ -113,9 +113,10 @@ namespace FDNG::UI
 			ShellExecuteA(nullptr, "open", a_path, nullptr, nullptr, SW_SHOWNORMAL);
 		}
 
-		// Which preset the live motion fields currently equal (nullptr = none).
-		// Lets the preset combo show "Arc" vs "Custom" instead of a static label.
-		const char* MatchingPreset(const Settings* a_s, const std::vector<Presets::Effect>& a_presets)
+		// The preset the live motion fields currently equal (nullptr = none).
+		// Returns the whole Effect so the panel can show its name plus the
+		// description/attribution, not just a label.
+		const Presets::Effect* MatchingPreset(const Settings* a_s, const std::vector<Presets::Effect>& a_presets)
 		{
 			for (const auto& p : a_presets) {
 				if (std::fabs(p.motion.riseSpeed - a_s->motion.riseSpeed) < 0.5f &&
@@ -124,7 +125,7 @@ namespace FDNG::UI
 					std::fabs(p.motion.lateralDamping - a_s->motion.lateralDamping) < 0.05f &&
 					p.spread == a_s->spreadPattern &&
 					std::fabs(p.spawnAngleDeg - a_s->spawnAngleDeg) < 0.5f) {
-					return p.name.c_str();
+					return &p;
 				}
 			}
 			return nullptr;
@@ -349,10 +350,15 @@ namespace FDNG::UI
 				Tip("Drop .ttf/.otf files in the folder, click Rescan to list them here. A picked font takes effect on the next game start.");
 				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
 				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
-				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.1f, 2.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.1f, 3.0f, "%.2f", 0);
+				Tip("Overall number size. The final size is capped by 'Max size multiplier' below.");
 				ImGuiMCP::SliderFloat("Big hits grow by", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
 				Tip("How much larger high-damage numbers render (logarithmic in the damage). 0 = all numbers equal size.");
-				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 4.0f, "%.2f", 0);
+				Tip("Ceiling on the final size. Kept at or above the base multiplier so raising the base always has an effect.");
+				// The base scale feeds the same clamp as the magnitude bonus, so a
+				// ceiling below the base would silently cap it — keep them ordered.
+				s->maxFontScaleCeiling = std::max(s->maxFontScaleCeiling, s->baseFontScale);
 				ImGuiMCP::Checkbox("Abbreviate big numbers", &s->abbreviateNumbers);
 				Tip("Show 10000+ as 1.2k / 3.4M to keep late-game numbers compact.");
 
@@ -360,10 +366,15 @@ namespace FDNG::UI
 				ImGuiMCP::TextDisabled("How size responds to how far the target is (ranged readability).");
 				ImGuiMCP::SliderFloat("Reference distance (m)", &s->distanceRefMeters, 1.0f, 30.0f, "%.1f", 0);
 				Tip("Numbers are full size within this range. Raise it to keep numbers big further out (e.g. for bows).");
-				ImGuiMCP::SliderFloat("Flat: min size at distance", &s->flatDistanceMinScale, 0.1f, 1.5f, "%.2f", 0);
-				Tip("Flat only: how small a far number may shrink. 1.0 = never shrinks. Raise this if ranged numbers look too small.");
-				ImGuiMCP::SliderFloat("VR: max size boost at distance", &s->vrDistanceMaxBoost, 1.0f, 16.0f, "%.1f", 0);
-				Tip("VR only: how much far numbers grow to stay readable at range. Higher = bigger distant numbers.");
+				// Only the running platform's control is shown; the other has no
+				// effect on this instance.
+				if (REL::Module::IsVR()) {
+					ImGuiMCP::SliderFloat("Max size boost at distance", &s->vrDistanceMaxBoost, 1.0f, 16.0f, "%.1f", 0);
+					Tip("How much far numbers grow to stay readable at range. Higher = bigger distant numbers.");
+				} else {
+					ImGuiMCP::SliderFloat("Min size at distance", &s->flatDistanceMinScale, 0.1f, 1.5f, "%.2f", 0);
+					Tip("How small a far number may shrink. 1.0 = never shrinks. Raise this if ranged numbers look too small.");
+				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Motion effect", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
@@ -374,9 +385,10 @@ namespace FDNG::UI
 				// currently equal, or "<last loaded> (modified)" once tuned, so
 				// the combo never claims a preset that isn't actually active.
 				static std::string lastLoaded;
+				const Presets::Effect* match = MatchingPreset(s, presets);
 				std::string preview;
-				if (const char* match = MatchingPreset(s, presets)) {
-					preview = match;
+				if (match) {
+					preview = match->name;
 				} else if (!lastLoaded.empty()) {
 					preview = std::format("{} (modified)", lastLoaded);
 				} else {
@@ -390,28 +402,25 @@ namespace FDNG::UI
 							s->spawnAngleDeg = p.spawnAngleDeg;
 							lastLoaded = p.name;
 						}
-						// Hover shows the preset's description and attribution.
-						if ((!p.description.empty() || !p.source.empty()) && ImGuiMCP::IsItemHovered(0)) {
-							std::string tip = p.description;
-							if (!p.source.empty()) {
-								if (!tip.empty()) {
-									tip += "\n";
-								}
-								tip += "Source: " + p.source;
-							}
-							ImGuiMCP::SetTooltip("%s", tip.c_str());
-						}
 					}
 					ImGuiMCP::EndCombo();
 				}
 				Tip("Load a starting point (built-ins plus any JSON in Data/SKSE/Plugins/FloatingDamageNG/Presets), then tune the sliders. Built-ins are defined the same way.");
+				// Description/attribution of the active preset, shown persistently
+				// on the panel (not just on hover in the dropdown).
+				if (match && !match->description.empty()) {
+					ImGuiMCP::TextDisabled("%s", match->description.c_str());
+				}
+				if (match && !match->source.empty()) {
+					ImGuiMCP::TextDisabled("Source: %s", match->source.c_str());
+				}
 				ImGuiMCP::SliderFloat("Rise speed (units/s)", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
 				Tip("How fast a number rises. Negative makes it sink.");
-				ImGuiMCP::SliderFloat("Gravity", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
-				Tip("Downward pull. Negative arcs the number up then back down (arc/fireworks); 0 keeps a steady rise.");
+				ImGuiMCP::SliderFloat("Vertical accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
+				Tip("Negative = gravity: arcs the number up then pulls it back down (arc/fireworks). Positive = accelerates upward. 0 = steady rise.");
 				ImGuiMCP::SliderFloat("Launch speed (units/s)", &s->motion.lateralSpeed, 0.0f, 250.0f, "%.0f", 0);
 				Tip("How fast a number shoots sideways / outward.");
-				ImGuiMCP::SliderFloat("Slowdown", &s->motion.lateralDamping, 0.0f, 12.0f, "%.1f", 0);
+				ImGuiMCP::SliderFloat("Slowdown", &s->motion.lateralDamping, 0.0f, 20.0f, "%.1f", 0);
 				Tip("0 = keeps its speed; higher = bursts out fast then coasts to a stop (Radial/Fireworks feel).");
 
 				int pattern = static_cast<int>(s->spreadPattern);
@@ -424,9 +433,12 @@ namespace FDNG::UI
 					ImGuiMCP::SliderFloat("Rapid-hit spacing", &s->rapidHitSpread, 0.0f, 120.0f, "%.0f", 0);
 					ImGuiMCP::SliderFloat("Side bias", &s->rapidHitBias, -1.0f, 1.0f, "%.2f", 0);
 					Tip("-1 all left, 0 even alternation, +1 all right.");
+				} else if (s->spreadPattern == SpreadPattern::kRotate) {
+					ImGuiMCP::SliderFloat("Rotation per hit (deg)", &s->spawnAngleDeg, 0.0f, 360.0f, "%.0f", 0);
+					Tip("Degrees each successive number turns around the target (144 = a 5-point star spray).");
 				} else {
-					ImGuiMCP::SliderFloat("Angle per hit / tilt", &s->spawnAngleDeg, 0.0f, 180.0f, "%.0f", 0);
-					Tip("Rotate: degrees each successive number turns around the target. Diagonal: launch tilt above horizontal.");
+					ImGuiMCP::SliderFloat("Diagonal tilt (deg)", &s->spawnAngleDeg, 0.0f, 90.0f, "%.0f", 0);
+					Tip("Launch tilt above horizontal for the alternating diagonals.");
 				}
 
 				ImGuiMCP::Checkbox("Squash and stretch", &s->squashStretch);
@@ -435,19 +447,27 @@ namespace FDNG::UI
 					ImGuiMCP::SliderFloat("Stretch amount", &s->stretchIntensity, 0.0f, 1.0f, "%.2f", 0);
 				}
 				ImGuiMCP::SliderFloat("Speed", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
+				Tip("Scales how fast the whole animation plays - including how fast it ages, so a higher speed also fades numbers sooner. Raise Lifetime to keep them on screen as long.");
 				ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
 
-				// Save the current path as a shareable JSON preset file.
+				// Save the current path as a shareable JSON preset file, with
+				// optional description/attribution so users can annotate and
+				// credit without hand-editing JSON.
 				ImGuiMCP::Separator();
 				static char presetName[48]{};
+				static char presetDesc[128]{};
+				static char presetSrc[128]{};
 				static std::string saveMsg;
-				ImGuiMCP::InputTextWithHint("##fdng_preset_name", "Preset name to save...", presetName, sizeof(presetName), 0, nullptr, nullptr);
-				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::InputTextWithHint("##fdng_preset_name", "Preset name to save...", presetName, sizeof(presetName), 0, nullptr, nullptr)) {
+					saveMsg.clear();  // stop showing a stale result once they edit the name
+				}
+				ImGuiMCP::InputTextWithHint("##fdng_preset_desc", "Description (optional)", presetDesc, sizeof(presetDesc), 0, nullptr, nullptr);
+				ImGuiMCP::InputTextWithHint("##fdng_preset_src", "Source / credit (optional)", presetSrc, sizeof(presetSrc), 0, nullptr, nullptr);
 				if (ImGuiMCP::Button("Save preset", { 0, 0 }) && presetName[0]) {
-					// Keep the typed name on failure so it isn't lost.
-					if (Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg })) {
+					// Keep the typed fields on failure so they aren't lost.
+					if (Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg, presetDesc, presetSrc })) {
 						saveMsg = std::format("Saved '{}'.", presetName);
-						presetName[0] = '\0';
+						presetName[0] = presetDesc[0] = presetSrc[0] = '\0';
 					} else {
 						saveMsg = "Save failed - use a unique name (letters, numbers, spaces, - or _; not a built-in).";
 					}
@@ -483,7 +503,7 @@ namespace FDNG::UI
 				if (ImGuiMCP::BeginTable("##fdng_pertype", 3, tblFlags, { 0, 0 }, 0.0f)) {
 					ImGuiMCP::TableSetupColumn("Damage type", 0, 0.30f, 0);
 					ImGuiMCP::TableSetupColumn("Motion", 0, 0.35f, 0);
-					ImGuiMCP::TableSetupColumn("Font", 0, 0.35f, 0);
+					ImGuiMCP::TableSetupColumn("Font (restart)", 0, 0.35f, 0);
 					ImGuiMCP::TableHeadersRow();
 					for (std::size_t idx = 0; idx < kPerKindMeta.size(); ++idx) {
 						const int i = static_cast<int>(idx);
@@ -525,9 +545,11 @@ namespace FDNG::UI
 
 			if (ImGuiMCP::CollapsingHeader("Spawn origin", 0)) {
 				ImGuiMCP::SliderFloat("Offset up (game units)", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
-				ImGuiMCP::SliderFloat("Offset toward you", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
-				ImGuiMCP::SliderFloat("Offset sideways", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
-				Tip("Shift where numbers spawn relative to the target's head, in a view-relative frame (game units). Use Live preview at the top to see it.");
+				Tip("Shift the spawn point relative to the target's head (~70 game units = 1 m). Use Live preview at the top to see it.");
+				ImGuiMCP::SliderFloat("Offset toward you (game units)", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
+				Tip("Shift the spawn point relative to the target's head (~70 game units = 1 m). Use Live preview at the top to see it.");
+				ImGuiMCP::SliderFloat("Offset sideways (game units)", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
+				Tip("Shift the spawn point relative to the target's head (~70 game units = 1 m). Use Live preview at the top to see it.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Thresholds", 0)) {

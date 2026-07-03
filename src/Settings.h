@@ -99,8 +99,8 @@ namespace FDNG
 		float baseFontPixels{ 48.0f };  // atlas size the numbers draw at before scaling
 		float baseFontScale{ 1.0f };
 		float logScaleModifier{ 0.25f };
-		float maxFontScaleCeiling{ 1.6f };
-		bool abbreviateNumbers{ false };  // 10000+ only: 12345 -> 12k, 3400000 -> 3.4M
+		float maxFontScaleCeiling{ 2.5f };  // headroom so big hits keep growing instead of saturating early
+		bool abbreviateNumbers{ false };    // 10000+ only: 12345 -> 12k, 3400000 -> 3.4M
 
 		// [Distance] — how number size responds to how far the target is (the
 		// ranged-attack readability knobs). Reference distance is shared: within
