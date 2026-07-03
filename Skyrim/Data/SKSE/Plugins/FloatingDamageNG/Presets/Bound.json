@@ -1,0 +1,9 @@
+{
+  "name": "Bound",
+  "riseSpeed": 130,
+  "riseAccel": -320,
+  "lateralSpeed": 0,
+  "lateralDamping": 0,
+  "spreadPattern": 0,
+  "spawnAngle": 0
+}

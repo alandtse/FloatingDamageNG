@@ -7,6 +7,10 @@ Float is the only compiled-in effect (the always-present default). Arc,
 Radial, and Fireworks ship here as loose files so you can see and edit how
 they are built - delete or change them freely; a reinstall restores them.
 
+Freeze, Accelerate, Bound, and Drop approximate the classic Floating Damage
+display modes (its mode 0 "Default" is our Float). They are our physics
+take on those names, not exact copies - tweak to taste.
+
 Save a preset in-game: type a name in the "Preset name to save..." box and
 click Save preset (any name except "Float", which is reserved for the
 built-in). Share a preset by copying its .json to another install.
