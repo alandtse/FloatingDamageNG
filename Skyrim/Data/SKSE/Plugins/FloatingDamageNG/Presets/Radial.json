@@ -1,0 +1,9 @@
+{
+  "name": "Radial",
+  "riseSpeed": 10,
+  "riseAccel": 0,
+  "lateralSpeed": 135,
+  "lateralDamping": 2.5,
+  "spreadPattern": 0,
+  "spawnAngle": 0
+}

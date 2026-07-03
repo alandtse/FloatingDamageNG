@@ -36,14 +36,14 @@ namespace FDNG
 		SpreadPattern spread;
 		float spawnAngleDeg;  // per-hit rotation (kRotate) or diagonal tilt (kDiagonalAlternate)
 	};
-	// Order is the menu combo order; index persists as iSelectedProfile.
-	inline constexpr std::array<EffectPreset, 4> kEffectPresets{ {
+	// The one compiled-in effect: the guaranteed zero-file default and
+	// fallback, so the mod always has a working motion even if the Presets
+	// folder is missing. A plain rise-and-fade matches the genre default
+	// (Floating Damage's mode 0). Everything fancier — Arc, Radial, Fireworks
+	// — ships as a loose JSON preset the user can see, edit, and share, so
+	// each effect has exactly one source of truth (no duplicate picker entry).
+	inline constexpr std::array<EffectPreset, 1> kEffectPresets{ {
 		{ "Float", { 45.0f, 0.0f, 0.0f, 0.0f }, SpreadPattern::kAlternate, 0.0f },
-		{ "Arc", { 90.0f, -220.0f, 55.0f, 0.0f }, SpreadPattern::kAlternate, 0.0f },
-		{ "Radial", { 10.0f, 0.0f, 135.0f, 2.5f }, SpreadPattern::kAlternate, 0.0f },
-		// Fireworks: strong damped burst up-and-out, gravity pulling it back,
-		// each hit rotated by a near-star angle for a spray.
-		{ "Fireworks", { 40.0f, -160.0f, 150.0f, 3.5f }, SpreadPattern::kRotate, 144.0f },
 	} };
 
 	// How a number marks its origin (whose fight it is).
@@ -108,8 +108,8 @@ namespace FDNG
 
 		// [KinematicProfiles] — the active spawn effect (a preset copied here,
 		// then freely tuned).
-		int motionPreset{ 1 };  // last-applied preset index (menu default; Arc)
-		MotionProfile motion{ kEffectPresets[1].motion };
+		int motionPreset{ 0 };  // legacy default-seed index (the compiled Float)
+		MotionProfile motion{ kEffectPresets[0].motion };
 		SpreadPattern spreadPattern{ SpreadPattern::kAlternate };
 		float spawnAngleDeg{ 0.0f };  // per-hit rotation / diagonal tilt
 		float globalSpeedMultiplier{ 1.1f };

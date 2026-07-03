@@ -1,0 +1,9 @@
+{
+  "name": "Fireworks",
+  "riseSpeed": 40,
+  "riseAccel": -160,
+  "lateralSpeed": 150,
+  "lateralDamping": 3.5,
+  "spreadPattern": 1,
+  "spawnAngle": 144
+}

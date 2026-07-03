@@ -1,12 +1,17 @@
-Motion-effect presets. Each .json file here appears in the FloatingDamageNG
-preset picker (SKSE Menu Framework > Floating Damage NG > Settings > Motion
-effect > Preset), alongside the built-ins. Selecting one loads its path; you
-can then tune the sliders and re-save.
+Motion-effect presets. Each .json file here appears in the preset picker
+(SKSE Menu Framework > Floating Damage NG > Numbers > Motion effect > Preset),
+alongside the compiled default (Float). Selecting one loads its motion into
+the live fields; you can then tune the sliders and re-save.
+
+Float is the only compiled-in effect (the always-present default). Arc,
+Radial, and Fireworks ship here as loose files so you can see and edit how
+they are built - delete or change them freely; a reinstall restores them.
 
 Save a preset in-game: type a name in the "Preset name to save..." box and
-click Save preset. Share a preset by copying its .json to another install.
+click Save preset (any name except "Float", which is reserved for the
+built-in). Share a preset by copying its .json to another install.
 
-Fields (see "Example - Cascade.json"):
+Fields (see "Arc.json" / "Fireworks.json"):
   name            display name in the picker
   riseSpeed       upward velocity (game units/sec)
   riseAccel       vertical acceleration; negative = gravity (arc/fireworks fall)
