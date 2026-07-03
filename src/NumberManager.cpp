@@ -25,7 +25,7 @@ namespace FDNG
 		constexpr float kNPCScale = 0.70f;
 		constexpr float kCritScaleBoost = 1.5f;
 		constexpr float kPopInSeconds = 0.12f;
-		constexpr float kMinMagnitudeScale = 0.6f;
+		constexpr float kMinMagnitudeScale = 0.1f;  // floor of the size curve; lets numbers go small
 	}
 
 	NumberManager* NumberManager::GetSingleton()

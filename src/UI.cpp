@@ -252,7 +252,7 @@ namespace FDNG::UI
 				ImGuiMCP::TextDisabled("(restart)");
 				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
 				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
-				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.1f, 2.0f, "%.2f", 0);
 				ImGuiMCP::SliderFloat("Big hits grow by", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
 				Tip("How much larger high-damage numbers render (logarithmic in the damage). 0 = all numbers equal size.");
 				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
