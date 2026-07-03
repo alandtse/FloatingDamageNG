@@ -37,6 +37,7 @@ namespace logger = SKSE::log;
 #include "CombatLog.h"
 #include "DevBench.h"
 #include "Settings.h"
+#include "StyleMetrics.h"
 #include "UI.h"
 
 namespace FDNG::UI
@@ -130,6 +131,7 @@ namespace FDNG::UI
 
 			const float t = s->styleThickness;
 			const float fontH = ImGuiMCP::GetFontSize();
+			const auto metrics = ComputeStyleMetrics(s->originStyle, t);
 			float x = base.x + 16.0f;
 			const float y = base.y + (h - fontH) * 0.5f;
 			for (const auto& sm : samples) {
@@ -138,21 +140,22 @@ namespace FDNG::UI
 				const bool outline = s->originStyle == OriginStyle::kOutline;
 				const auto textOutline = outline ? marker : ToImCol(0x000000);
 				const float tt = outline ? t : 1.0f;
-				// 8-direction ring, matching the renderer.
-				const float d = tt * 0.7071f;
-				const float offs[][2] = { { tt, 0 }, { -tt, 0 }, { 0, tt }, { 0, -tt }, { d, d }, { -d, d }, { d, -d }, { -d, -d } };
-				for (const auto& o : offs) {
-					ImGuiMCP::ImDrawListManager::AddText(dl, { x + o[0], y + o[1] }, textOutline, sm.text);
+				for (const auto& o : kRingOffsets) {
+					ImGuiMCP::ImDrawListManager::AddText(dl, { x + o[0] * tt, y + o[1] * tt }, textOutline, sm.text);
 				}
 				ImGuiMCP::ImDrawListManager::AddText(dl, { x, y }, fill, sm.text);
 
-				const float textW = fontH * 0.55f * static_cast<float>(std::strlen(sm.text));
+				ImGuiMCP::ImVec2 textSz;
+				ImGuiMCP::CalcTextSize(&textSz, sm.text, nullptr, false, -1.0f);
 				if (s->originStyle == OriginStyle::kUnderline) {
-					ImGuiMCP::ImDrawListManager::AddRectFilled(dl, { x, y + fontH + 2.0f }, { x + textW, y + fontH + 2.0f + t }, marker, 0.0f, 0);
+					ImGuiMCP::ImDrawListManager::AddRectFilled(dl,
+						{ x, y + fontH + kUnderlineGap }, { x + textSz.x, y + fontH + kUnderlineGap + t }, marker, 0.0f, 0);
 				} else if (s->originStyle == OriginStyle::kBox) {
-					ImGuiMCP::ImDrawListManager::AddRect(dl, { x - 5.0f, y - 4.0f }, { x + textW + 5.0f, y + fontH + 4.0f }, marker, 3.0f, 0, t);
+					ImGuiMCP::ImDrawListManager::AddRect(dl,
+						{ x - metrics.padX + t * 0.5f, y - metrics.padTop + t * 0.5f },
+						{ x + textSz.x + metrics.padX - t * 0.5f, y + fontH + metrics.padBottom - t * 0.5f }, marker, 3.0f, 0, t);
 				}
-				x += textW + 32.0f;
+				x += textSz.x + 32.0f;
 			}
 			ImGuiMCP::Dummy({ w, h + 6.0f });
 		}
@@ -165,7 +168,7 @@ namespace FDNG::UI
 				ImGuiMCP::Checkbox("Your damage", &s->showPlayerDamageDealt);
 				ImGuiMCP::Checkbox("Follower damage", &s->showFollowerDamageDealt);
 				ImGuiMCP::Checkbox("NPC-vs-NPC damage", &s->showNPCOnNPCDamage);
-				Tip("Fights you aren't part of. Rendered smaller and dimmer, and hidden beyond the visibility radius.");
+				Tip("Fights you aren't part of. Rendered smaller with the NPC marker color, hidden beyond the visibility radius.");
 				ImGuiMCP::Checkbox("Damage you take", &s->showPlayerDamageTaken);
 				ImGuiMCP::Checkbox("Player numbers in first person", &s->showFirstPersonNumbers);
 				Tip("Pinned to a screen spot on flat, anchored ahead of you in VR. Off = hidden while in first person.");

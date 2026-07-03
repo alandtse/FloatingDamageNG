@@ -8,6 +8,7 @@
 #include "ImGuiVRHelperClientSDK.h"
 #include "NumberManager.h"
 #include "Settings.h"
+#include "StyleMetrics.h"
 
 namespace FDNG::Renderer
 {
@@ -24,7 +25,6 @@ namespace FDNG::Renderer
 		std::vector<ImGuiVRHelperPluginAPI::WorldQuad> g_quads;
 
 		constexpr float kBaseFontPx = 48.0f;
-		constexpr float kSubtextRatio = 0.55f;
 		constexpr float kPanelMarginPx = 16.0f;
 		constexpr float kPanelGapPx = 12.0f;  // enough to prevent quad UV bleed; smaller = more panel capacity
 		// World size of one panel pixel on a billboard (matches FloatingSubtitles' tuning).
@@ -35,6 +35,9 @@ namespace FDNG::Renderer
 		// far skirmish reads as a hint rather than a billboard wall.
 		constexpr float kQuadRefDistanceMeters = 3.5f;
 		constexpr float kQuadMaxDistanceBoost = 8.0f;
+		// NPC in-view test margin beyond the screen edges, so head/camera
+		// motion does not pop numbers at the periphery.
+		constexpr float kFrustumMargin = 0.3f;
 
 		ImU32 KindColor(const Number& a_n, float a_alpha)
 		{
@@ -140,14 +143,8 @@ namespace FDNG::Renderer
 		void AddOutlinedText(ImDrawList* a_drawList, ImFont* a_font, float a_size, ImVec2 a_pos, ImU32 a_color, ImU32 a_outline, float a_thickness, const char* a_text)
 		{
 			if (a_thickness > 0.0f) {
-				const float t = a_thickness;
-				constexpr float kDiag = 0.7071f;
-				const ImVec2 offsets[] = {
-					{ t, 0.0f }, { -t, 0.0f }, { 0.0f, t }, { 0.0f, -t },
-					{ t * kDiag, t * kDiag }, { -t * kDiag, t * kDiag }, { t * kDiag, -t * kDiag }, { -t * kDiag, -t * kDiag }
-				};
-				for (const auto& o : offsets) {
-					a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + o.x, a_pos.y + o.y), a_outline, a_text);
+				for (const auto& o : kRingOffsets) {
+					a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + o[0] * a_thickness, a_pos.y + o[1] * a_thickness), a_outline, a_text);
 				}
 			} else {
 				a_drawList->AddText(a_font, a_size, ImVec2(a_pos.x + 2.0f, a_pos.y + 2.0f), a_outline, a_text);
@@ -162,14 +159,7 @@ namespace FDNG::Renderer
 			const auto& n = *a_rn.number;
 			ImFont* font = ImGui::GetFont();
 			const float mainPx = a_fontPx;
-			// The subtext grows with the resisted share, so a mostly-resisted
-			// hit reads at a glance.
-			float subRatio = kSubtextRatio;
-			if (n.mitigated > 0.0f && n.amount > 0.0f) {
-				const float resistShare = n.mitigated / (n.mitigated + n.amount);
-				subRatio = 0.40f + 0.35f * resistShare;
-			}
-			const float subPx = a_fontPx * subRatio;
+			const float subPx = a_fontPx * SubtextRatio(n.amount, n.mitigated);
 
 			const ImVec2 mainSz = font->CalcTextSizeA(mainPx, FLT_MAX, 0.0f, n.text);
 			ImVec2 blockSz = mainSz;
@@ -188,17 +178,14 @@ namespace FDNG::Renderer
 
 			// kOutline: the origin color IS the text outline. Underline/box
 			// keep a thin black outline for legibility and draw the origin
-			// marker as a separate shape. The marker must stay inside the
-			// returned extent — in VR anything outside it falls off the quad.
+			// marker as a separate shape. The marker (ring included) must stay
+			// inside the returned extent — in VR anything outside it falls off
+			// the quad — so the metrics pad for the current style.
 			const bool outlineStyle = settings->originStyle == OriginStyle::kOutline;
 			const ImU32 textOutline = outlineStyle ? origin : IM_COL32(0, 0, 0, alpha);
 			const float textThickness = outlineStyle ? thickness : 1.0f;
-			const float padX = settings->originStyle == OriginStyle::kBox ? 4.0f + thickness : 0.0f;
-			const float padTop = settings->originStyle == OriginStyle::kBox ? 3.0f + thickness : 0.0f;
-			const float padBottom = settings->originStyle == OriginStyle::kBox       ? 3.0f + thickness :
-			                        settings->originStyle == OriginStyle::kUnderline ? 2.0f + thickness :
-			                                                                           0.0f;
-			const ImVec2 content{ a_topLeft.x + padX, a_topLeft.y + padTop };
+			const auto metrics = ComputeStyleMetrics(settings->originStyle, thickness);
+			const ImVec2 content{ a_topLeft.x + metrics.padX, a_topLeft.y + metrics.padTop };
 
 			AddOutlinedText(a_drawList, font, mainPx,
 				ImVec2(content.x + (blockSz.x - mainSz.x) * 0.5f, content.y), color, textOutline, textThickness, n.text);
@@ -212,19 +199,19 @@ namespace FDNG::Renderer
 			switch (settings->originStyle) {
 			case OriginStyle::kUnderline:
 				a_drawList->AddRectFilled(
-					ImVec2(content.x, content.y + blockSz.y + 2.0f),
-					ImVec2(content.x + blockSz.x, content.y + blockSz.y + 2.0f + thickness), origin);
+					ImVec2(content.x, content.y + blockSz.y + kUnderlineGap),
+					ImVec2(content.x + blockSz.x, content.y + blockSz.y + kUnderlineGap + thickness), origin);
 				break;
 			case OriginStyle::kBox:
 				a_drawList->AddRect(
 					ImVec2(a_topLeft.x + thickness * 0.5f, a_topLeft.y + thickness * 0.5f),
-					ImVec2(a_topLeft.x + blockSz.x + 2.0f * padX - thickness * 0.5f, a_topLeft.y + padTop + blockSz.y + padBottom - thickness * 0.5f),
+					ImVec2(a_topLeft.x + blockSz.x + 2.0f * metrics.padX - thickness * 0.5f, a_topLeft.y + metrics.padTop + blockSz.y + metrics.padBottom - thickness * 0.5f),
 					origin, 3.0f, 0, thickness);
 				break;
 			default:
 				break;
 			}
-			return { blockSz.x + 2.0f * padX, padTop + blockSz.y + padBottom };
+			return { blockSz.x + 2.0f * metrics.padX, metrics.padTop + blockSz.y + metrics.padBottom };
 		}
 
 		// Shared camera pass (flat and VR — the VR camera tracks the HMD):
@@ -244,7 +231,7 @@ namespace FDNG::Renderer
 				rn.screenX = x;
 				rn.screenY = y;
 				rn.inView = rn.number->origin != OriginTier::kNPC ||
-				            (rn.projected && x > -0.3f && x < 1.3f && y > -0.3f && y < 1.3f);
+				            (rn.projected && x > -kFrustumMargin && x < 1.0f + kFrustumMargin && y > -kFrustumMargin && y < 1.0f + kFrustumMargin);
 				projectedCount += rn.projected ? 1 : 0;
 			}
 			// If nothing projects the camera matrix is unusable this frame;
@@ -329,26 +316,30 @@ namespace FDNG::Renderer
 				// Full alpha in the panel; the fade is baked into the text color,
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
 				const float fontPx = kBaseFontPx * rn.scale;
+				const auto metrics = ComputeStyleMetrics(settings->originStyle, settings->styleThickness);
 				const ImVec2 estimate = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
-				// The subtext can be wider than the main text; reserve for it or
-				// neighboring quads sample each other's pixels.
-				float blockW = estimate.x + 8.0f;
+				// The subtext can be wider than the main text; reserve for it (at
+				// the SAME dynamic ratio the drawer uses) or neighboring quads
+				// sample each other's pixels.
+				float blockW = estimate.x;
+				float blockH = estimate.y;
 				if (rn.number->subtext[0] != '\0') {
-					const ImVec2 subEstimate = ImGui::GetFont()->CalcTextSizeA(fontPx * kSubtextRatio, FLT_MAX, 0.0f, rn.number->subtext);
-					blockW = std::max(blockW, subEstimate.x + 8.0f);
+					const float subPx = fontPx * SubtextRatio(rn.number->amount, rn.number->mitigated);
+					const ImVec2 subEstimate = ImGui::GetFont()->CalcTextSizeA(subPx, FLT_MAX, 0.0f, rn.number->subtext);
+					blockW = std::max(blockW, subEstimate.x);
+					blockH += subEstimate.y;
 				}
-				if (settings->originStyle == OriginStyle::kBox) {
-					blockW += 2.0f * (4.0f + settings->styleThickness);
-				}
+				blockW += 2.0f * metrics.padX + 8.0f;
+				blockH += metrics.padTop + metrics.padBottom;
 
 				if (penX + blockW > panelSize.x - kPanelMarginPx) {
 					penX = kPanelMarginPx;
 					penY += rowH + kPanelGapPx;
 					rowH = 0.0f;
 				}
-				if (penY + fontPx * 2.0f > panelSize.y - kPanelMarginPx) {
-					// Panel full; the list is priority-sorted and rows only grow
-					// downward, so nothing later fits either.
+				if (penY + blockH > panelSize.y - kPanelMarginPx) {
+					// Panel full. Everything not yet packed is lower priority;
+					// stop here rather than backfill smaller blocks around it.
 					dropped = g_resolved.size() - (index - 1);
 					break;
 				}
@@ -445,7 +436,7 @@ namespace FDNG::Renderer
 					// Perspective size: full size inside ~3.5 m, shrinking with
 					// distance.
 					const float distMeters = std::max(playerPos.GetDistance(rn.worldPos) * kGameUnitToMeter, 0.1f);
-					const float perspective = std::clamp(3.5f / distMeters, 0.25f, 1.25f);
+					const float perspective = std::clamp(kQuadRefDistanceMeters / distMeters, 0.25f, 1.25f);
 					fontPx = kBaseFontPx * rn.scale * perspective;
 				}
 

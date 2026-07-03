@@ -60,7 +60,8 @@ namespace FDNG
 			}
 			// Lodged projectiles and equipment attach their own node subtrees
 			// to the skeleton (e.g. "SteelArrowFlight" from a stuck arrow) and
-			// can win "nearest", masking the struck body part.
+			// can win "nearest", masking the struck body part. Skip the whole
+			// subtree: nothing under a foreign attachment is a body part.
 			static constexpr std::array kForeignNodes{ "arrow", "bolt", "flight", "weapon", "shield", "quiver" };
 			const RE::NiAVObject* best = nullptr;
 			if (!a_root->name.empty()) {
@@ -70,12 +71,13 @@ namespace FDNG
 						return std::tolower(static_cast<unsigned char>(a)) == b;
 					}).begin() != name.end();
 				});
-				if (!foreign) {
-					const float d = a_root->world.translate.GetSquaredDistance(a_pos);
-					if (d < a_bestDistSq) {
-						a_bestDistSq = d;
-						best = a_root;
-					}
+				if (foreign) {
+					return nullptr;
+				}
+				const float d = a_root->world.translate.GetSquaredDistance(a_pos);
+				if (d < a_bestDistSq) {
+					a_bestDistSq = d;
+					best = a_root;
 				}
 			}
 			for (const auto& child : node->GetChildren()) {
