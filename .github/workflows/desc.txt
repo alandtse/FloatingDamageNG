@@ -25,8 +25,8 @@ In VR the numbers are real 3D billboards at the target's position, rendered thro
 Source and issue tracker on the [url=https://github.com/alandtse/FloatingDamageNG]GitHub repository[/url] - bug reports with your FloatingDamageNG.log (and crash log if applicable) are the most useful thing you can send.[/color]
 
 [size=4][b]Shout outs[/b][/size]
-[color=#D4D4D8][url=https://github.com/powerof3]powerof3[/url] — the display architecture builds on Floating Subtitles and the hit-data capture on KillFeed. [/color]
-[color=#D4D4D8][url=https://www.nexusmods.com/profile/Felisky384]Felisky384[/url] — the original Floating Damage defined the genre. [/color]
+[color=#D4D4D8][url=https://github.com/powerof3]powerof3[/url]: the display architecture builds on Floating Subtitles and the hit-data capture on KillFeed. [/color]
+[color=#D4D4D8][url=https://www.nexusmods.com/profile/Felisky384]Felisky384[/url]: the original Floating Damage defined the genre. [/color]
 [color=#D4D4D8]The [url=https://github.com/alandtse/CommonLibVR/tree/ng]CommonLibSSE-NG[/url] maintainers and contributors, whose work makes one-DLL-for-three-runtimes possible.[/color]
 
 Want to support me or help me top off my AI credits? [url=https://buymeacoffee.com/alandtse]Buy Me a Coffee[/url]
