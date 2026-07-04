@@ -6,5 +6,5 @@
   "lateralDamping": 0,
   "spreadPattern": 0,
   "spawnAngle": 0,
-  "description": "Parabolic pop: rises then falls under gravity."
+  "description": "Arcs up and out, then falls under gravity."
 }
