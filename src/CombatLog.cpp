@@ -171,7 +171,15 @@ namespace FDNG
 		}
 
 		std::scoped_lock lk{ _lock };
-		_lastDamageAt = Clock::now();
+		// Damage the player RECEIVES must not refresh the idle-close timer: a
+		// lingering DoT or environmental hazard after combat would otherwise
+		// keep the session open forever (esp. when the player never fights
+		// back). Genuinely ongoing combat holds the session open via
+		// IsInCombat() instead; damage the player deals or NPC-vs-NPC damage
+		// still counts here. Stat recording below is unaffected.
+		if (!a_victim->IsPlayerRef()) {
+			_lastDamageAt = Clock::now();
+		}
 
 		const auto now = SessionSeconds();
 		const auto kindIdx = static_cast<std::size_t>(std::to_underlying(a_kind));
@@ -230,7 +238,11 @@ namespace FDNG
 			return;
 		}
 		std::scoped_lock lk{ _lock };
-		_lastDamageAt = Clock::now();
+		// Healing the player (regen/potions) likewise must not hold a session
+		// open after combat; NPC healing during an NPC fight still counts.
+		if (!a_target->IsPlayerRef()) {
+			_lastDamageAt = Clock::now();
+		}
 		GetCombatant(a_target).healingReceived += a_amount;
 	}
 
