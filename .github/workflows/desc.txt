@@ -3,6 +3,8 @@
 
 In VR the numbers are real 3D billboards at the target's position, rendered through [url=https://github.com/alandtse/imgui-vr-helper]ImGuiVRHelper[/url]'s world-quad API with per-pixel depth occlusion[/color][/size]
 
+[size=3][color=#D4D4D8][b]Source:[/b] [url=https://github.com/alandtse/FloatingDamageNG]github.com/alandtse/FloatingDamageNG[/url] (GPL-3.0 with modding exception)[/color][/size]
+
 [size=4][b]Installation instructions[/b][/size]
 [size=3][color=#D4D4D8]Install with MO2 or Vortex like any other SKSE plugin. One DLL serves all three runtimes. Configure via [i]Data/SKSE/Plugins/FloatingDamageNG.ini[/i] (fully commented) or in-game with SKSE Menu Framework installed.[/color][/size]
 
@@ -22,7 +24,7 @@ In VR the numbers are real 3D billboards at the target's position, rendered thro
 [color=#D4D4D8]Optional: [url=https://github.com/alandtse/SKSE-Menu-Framework-3]SKSE Menu Framework[/url] for the in-game settings panel (color pickers, sliders, live style preview) and the combat-stats browser (DPS graphs, sortable tables, drill-downs, death recaps). [/color]
 [color=#D4D4D8]Optional: [url=https://github.com/alandtse/devbench]devbench[/url] - when installed and enabled (off by default), combat stats are queryable over local MCP/REST for external tooling.
 
-Source and issue tracker on the [url=https://github.com/alandtse/FloatingDamageNG]GitHub repository[/url] - bug reports with your FloatingDamageNG.log (and crash log if applicable) are the most useful thing you can send.[/color]
+Report issues on the [url=https://github.com/alandtse/FloatingDamageNG/issues]issue tracker[/url]. Bug reports with your FloatingDamageNG.log (and crash log if applicable) are the most useful thing you can send.[/color]
 
 [size=4][b]Shout outs[/b][/size]
 [color=#D4D4D8][url=https://github.com/powerof3]powerof3[/url]: the display architecture builds on Floating Subtitles and the hit-data capture on KillFeed. [/color]

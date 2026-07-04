@@ -4,7 +4,7 @@ Floating damage numbers for Skyrim. One DLL for **SE, AE, and VR**, with true
 world-anchored 3D numbers in VR and a built-in combat analytics log.
 
 **Download:** [Nexus Mods](https://www.nexusmods.com/games/skyrimspecialedition/mods/184159/) ·
-**Source:** this repository (GPL-3.0 with modding exception)
+**Source:** [github.com/alandtse/FloatingDamageNG](https://github.com/alandtse/FloatingDamageNG) (GPL-3.0 with modding exception)
 
 ## What you see
 
