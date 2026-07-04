@@ -1,0 +1,12 @@
+{
+  "name": "Bound",
+  "riseSpeed": 200,
+  "riseAccel": -280,
+  "lateralSpeed": 0,
+  "lateralDamping": 0,
+  "spreadPattern": 0,
+  "spawnAngle": 0,
+  "description": "Springs up, then arcs back down.",
+  "source": "Inspired by Floating Damage display modes",
+  "url": "https://www.nexusmods.com/skyrimspecialedition/mods/14332"
+}

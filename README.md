@@ -1,54 +1,64 @@
 # FloatingDamageNG
 
-Floating damage numbers for Skyrim — one DLL for **SE, AE, and VR**, with true
+Floating damage numbers for Skyrim. One DLL for **SE, AE, and VR**, with true
 world-anchored 3D numbers in VR and a built-in combat analytics log.
 
 **Download:** [Nexus Mods](https://www.nexusmods.com/games/skyrimspecialedition/mods/184159/) ·
-**Source:** this repository (GPL-3.0 with modding exception)
+**Source:** [github.com/alandtse/FloatingDamageNG](https://github.com/alandtse/FloatingDamageNG) (GPL-3.0 with modding exception)
 
 ## What you see
 
 - Damage numbers over whoever takes the hit, colored by what caused it:
   physical (crimson), fire, frost, shock, poison, untyped magic, plus healing
-  (green `+N`). An enchanted-weapon swing shows two numbers — the physical hit
-  and the enchantment payload — because the engine applies them separately and
+  (green `+N`). An enchanted-weapon swing shows two numbers (the physical hit
+  and the enchantment payload) because the engine applies them separately and
   so do we. Frost and shock also apply their stamina/magicka bleed, which can
   display too (off by default).
 - **Crit / sneak / bash / block** styling from the engine's real hit flags,
   and a mitigation subtext that says what actually happened: `104 (-45
-armor)`, `(-30 blocked)` with the true blocked amount, or `(-20 resisted)` —
+armor)`, `(-30 blocked)` with the true blocked amount, or `(-20 resisted)`,
   sized by how much of the hit was mitigated.
 - **HEADSHOT** tags on bow and crossbow hits, resolved from the engine's hit
-  position against the victim's skeleton — works in vanilla, and stays
+  position against the victim's skeleton. Works in vanilla, and stays
   accurate under locational-damage mods (whose multipliers are already
   reflected in the number; an implied `x2.5` shows when a hit exceeds its
   normal baseline).
-- Numbers follow their target while loaded — a fleeing enemy under Flames
+- Numbers follow their target while loaded: a fleeing enemy under Flames
   carries its counting-up burn total with it; your self-heal rides along as
   you move. Damage-over-time ticks pool into one live-updating number instead
   of spam.
 - Player-received damage and healing: over your head in third person, pinned
   to a configurable screen spot in first person (flat), anchored ~1 m ahead at
   chest height in VR.
-- **Fully tunable motion**, presets included: Float, Arc (parabolic), Radial
-  burst, and Fireworks (rotating diagonal spray). A preset seeds a small set
-  of physics knobs — rise speed, gravity, launch speed, damping, plus the
-  spread pattern (alternate / rotate / diagonal) and per-hit angle — that you
-  can freely edit; the built-ins are defined the exact same way. Font size,
-  base scale, and how much big hits grow are all sliders, and the spawn point
-  can be nudged up / toward you / sideways. A **live preview** spawns sample
-  numbers on your console-selected target (`prid`) so you can tune it all in
-  real time.
-- **Whose fight it is** reads from a selectable origin marker — colored text
-  outline, underline, or box (your hits black, damage you take red, follower
+- **Data-driven motion.** An effect is a set of physics values (rise speed,
+  gravity, launch speed, damping, spread pattern, per-hit angle); a preset is
+  just saved values. Float is the built-in default; Arc, Radial, Fireworks,
+  and Freeze/Accelerate/Bound/Drop ship as editable JSON in
+  `Data/SKSE/Plugins/FloatingDamageNG/Presets`. The current effect saves back
+  to a JSON file to share, and you can edit or drop in your own. Presets carry
+  an optional description and attribution shown in the picker.
+- **Per damage type.** Any damage type can take its own motion preset and
+  font, the same way it takes its own color (e.g. fire sprays while frost
+  drifts).
+- **Fonts.** Chosen in-game from the TTF/OTF files in a `Fonts` drop-in folder
+  and the Windows font directory, globally or per type. A change applies on
+  the next game start (the glyph atlas is baked once per context).
+- **Sizing.** A base pixel size, a multiplier, and log-scaled growth for large
+  hits, plus distance controls (a reference distance, and a flat shrink floor
+  or a VR growth cap) so distant hits stay readable at range. Optional `1.2k`
+  abbreviation and squash-and-stretch. A live preview spawns sample numbers on
+  a console-selected target (`prid`, else the player); the spawn point can be
+  offset up, toward you, or sideways.
+- **Origin marker** shows whose fight a number is: a colored text outline,
+  underline, box, or none (your hits black, damage you take red, follower
   damage blue, bystander fights gray; all themable, with a live preview in the
-  menu) — and follower/NPC-vs-NPC numbers render smaller and distance-culled.
-- **Combat analytics** (optional): each fight is logged as a session — per
-  combatant damage dealt/taken, healing, crits, time-to-die, who fled — with
-  real, active, and peak DPS. Per-combatant drill-downs show damage **by
+  menu). Follower and NPC-vs-NPC numbers render smaller and are distance-culled.
+- **Combat analytics** (optional): each fight is logged as a session
+  (per-combatant damage dealt/taken, healing, crits, time-to-die, who fled)
+  with real, active, and peak DPS. Per-combatant drill-downs show damage **by
   weapon/spell** and **by target** as kind-colored meter bars, a **resist
   profile** (how much of each element that enemy shrugged off), and a **death
-  recap** — who landed the killing blow and the hits leading up to it. The
+  recap** (who landed the killing blow and the hits leading up to it). The
   stats browser (SKSE Menu Framework) has DPS graphs, click-to-sort tables,
   and a name filter; a live DPS readout shows during combat (top-right on
   flat, head-locked HUD plane in VR). Sessions append to a plain-text log, and
@@ -85,7 +95,7 @@ description.)
 | Source code          | Open (GPL-3.0 + modding exception, this repo)                                                  | Only an early version (v0.4) was ever published; the author is no longer active                        | Closed                                                                                         |
 
 If you play flat-screen only and want the web-styled visuals, Modern Floating
-Damage is a good mod — the honest difference there is renderer taste
+Damage is a good mod; the honest difference there is renderer taste
 (embedded browser vs ImGui), analytics, and the mitigation/locational detail.
 If you play VR, this is currently the only one of the three that renders in
 world space at all.
@@ -104,13 +114,13 @@ and the project can be forked if it is ever abandoned.
 - Optional: [SKSE Menu Framework 3](https://github.com/alandtse/SKSE-Menu-Framework-3)
   for the in-game settings panel (color pickers, sliders) and combat-stats
   browser. Without it, everything is configurable in the INI.
-- Optional: [devbench](https://github.com/alandtse/devbench) — when installed
+- Optional: [devbench](https://github.com/alandtse/devbench): when installed
   _and_ enabled (`bEnableDevBench`, off by default), combat stats are queryable
   over local MCP/REST for external tools.
 
 ## Configuration
 
-`Data/SKSE/Plugins/FloatingDamageNG.ini` — every filter, color, style,
+`Data/SKSE/Plugins/FloatingDamageNG.ini` holds every filter, color, style,
 threshold, and motion setting, with comments. With SKSE Menu Framework
 installed the same settings are editable in-game with a live style preview and
 saved back to the INI. Combat session reports append to
@@ -145,5 +155,5 @@ after each build.
 
 ## License
 
-GPL-3.0-or-later WITH LicenseRef-Modding-Exception — see [COPYING](COPYING) and
+GPL-3.0-or-later WITH LicenseRef-Modding-Exception. See [COPYING](COPYING) and
 [EXCEPTIONS.md](EXCEPTIONS.md).

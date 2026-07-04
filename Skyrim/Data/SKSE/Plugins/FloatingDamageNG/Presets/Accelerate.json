@@ -1,0 +1,12 @@
+{
+  "name": "Accelerate",
+  "riseSpeed": 20,
+  "riseAccel": 160,
+  "lateralSpeed": 0,
+  "lateralDamping": 0,
+  "spreadPattern": 0,
+  "spawnAngle": 0,
+  "description": "Rises slowly at first, then speeds up.",
+  "source": "Inspired by Floating Damage display modes",
+  "url": "https://www.nexusmods.com/skyrimspecialedition/mods/14332"
+}

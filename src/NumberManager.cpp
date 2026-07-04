@@ -3,6 +3,7 @@
 
 #include "NumberManager.h"
 
+#include "Presets.h"
 #include "Settings.h"
 
 namespace FDNG
@@ -13,6 +14,9 @@ namespace FDNG
 		// live in the data-driven MotionProfile (Settings).
 		constexpr float kSpreadStep = 30.0f;  // diagonal-alternate lateral gap, game units
 		constexpr float kFadePortion = 0.3f;  // alpha ramps out over the final 30% of life
+		// Minimum height a number should reach above the head anchor so its quad
+		// clears the skull mesh (else it is self-occluded in VR, e.g. Freeze).
+		constexpr float kHeadClearanceUnits = 15.0f;
 
 		constexpr float kMeterToGameUnit = 1.0f / 0.01428f;
 		constexpr float kDegToRad = 0.01745329f;
@@ -24,7 +28,7 @@ namespace FDNG
 		constexpr float kNPCScale = 0.70f;
 		constexpr float kCritScaleBoost = 1.5f;
 		constexpr float kPopInSeconds = 0.12f;
-		constexpr float kMinMagnitudeScale = 0.6f;
+		constexpr float kMinMagnitudeScale = 0.1f;  // floor of the size curve; lets numbers go small
 	}
 
 	NumberManager* NumberManager::GetSingleton()
@@ -41,9 +45,29 @@ namespace FDNG
 		}
 	}
 
+	namespace
+	{
+		// At 10000+ when enabled: "12345" -> "12.3k", "3400000" -> "3.4M";
+		// below the threshold (and always when disabled) it stays plain.
+		void FormatMagnitude(char* a_out, std::size_t a_cap, int a_value, bool a_abbrev)
+		{
+			if (a_abbrev && a_value >= 10000) {
+				if (a_value >= 1000000) {
+					std::snprintf(a_out, a_cap, "%.1fM", static_cast<double>(a_value) / 1000000.0);
+				} else {
+					std::snprintf(a_out, a_cap, "%.1fk", static_cast<double>(a_value) / 1000.0);
+				}
+			} else {
+				std::snprintf(a_out, a_cap, "%d", a_value);
+			}
+		}
+	}
+
 	void NumberManager::BuildText(Number& a_number) const
 	{
 		const auto rounded = std::max(1, static_cast<int>(std::lround(a_number.amount)));
+		char num[16]{};
+		FormatMagnitude(num, sizeof(num), rounded, Settings::GetSingleton()->abbreviateNumbers);
 		const char* prefix = "";
 		char locPrefix[20]{};
 		if (a_number.kind == DamageKind::kHealing) {
@@ -60,7 +84,7 @@ namespace FDNG
 		} else if (a_number.flags.blocked) {
 			prefix = "BLOCK ";
 		}
-		std::snprintf(a_number.text, sizeof(a_number.text), "%s%d", prefix, rounded);
+		std::snprintf(a_number.text, sizeof(a_number.text), "%s%s", prefix, num);
 
 		a_number.subtext[0] = '\0';
 		const auto settings = Settings::GetSingleton();
@@ -162,12 +186,25 @@ namespace FDNG
 		const RE::NiPoint3 up{ 0.0f, 0.0f, 1.0f };
 		const auto k = static_cast<int>(victimCount);
 
-		switch (settings->spreadPattern) {
+		// Resolve this number's effect: a per-kind preset override, else the
+		// global effect. Snapshotted here so the render loop stays lookup-free.
+		n.motion = settings->motion;
+		SpreadPattern spreadPattern = settings->spreadPattern;
+		float spawnAngleDeg = settings->spawnAngleDeg;
+		if (const auto kindIdx = std::to_underlying(a_event.kind); kindIdx < settings->motionByKind.size()) {
+			if (const auto* effect = Presets::ByName(settings->motionByKind[kindIdx])) {
+				n.motion = effect->motion;
+				spreadPattern = effect->spread;
+				spawnAngleDeg = effect->spawnAngleDeg;
+			}
+		}
+
+		switch (spreadPattern) {
 		case SpreadPattern::kRotate:
 			{
 				// Fireworks: each hit rotates the launch around the view axis; the
 				// launch tilts up-and-out so numbers spray diagonally.
-				const float ang = static_cast<float>(k) * settings->spawnAngleDeg * kDegToRad;
+				const float ang = static_cast<float>(k) * spawnAngleDeg * kDegToRad;
 				const RE::NiPoint3 dir = right * std::cos(ang) + up * std::sin(ang);
 				n.launchDir = dir;
 				n.spread = { 0.0f, 0.0f, 0.0f };
@@ -177,7 +214,7 @@ namespace FDNG
 			{
 				// Alternate up-left / up-right diagonals at the configured tilt.
 				const float side = (k % 2 == 1) ? 1.0f : -1.0f;
-				const float tilt = std::clamp(settings->spawnAngleDeg, 0.0f, 89.0f) * kDegToRad;
+				const float tilt = std::clamp(spawnAngleDeg, 0.0f, 89.0f) * kDegToRad;
 				n.launchDir = right * (side * std::cos(tilt)) + up * std::sin(tilt);
 				n.spread = right * (side * kSpreadStep * 0.5f * static_cast<float>((k + 1) / 2));
 				break;
@@ -196,6 +233,25 @@ namespace FDNG
 			}
 		}
 
+		// Self-occlusion clearance: an effect that never lifts the number clear
+		// of the head (Freeze, Drop) leaves its quad in the skull mesh, occluded
+		// in VR. Sample the vertical path (launch tilt + rise); if its peak stays
+		// under the head clearance, raise the spawn just enough to float it clear.
+		// Rising effects (Arc, Fireworks, Accelerate) peak high and get no lift.
+		{
+			const float maxT = settings->quadLifetimeSeconds * settings->globalSpeedMultiplier;
+			float peakUp = 0.0f;
+			for (int i = 1; i <= 6; ++i) {
+				const float t = maxT * (static_cast<float>(i) / 6.0f);
+				const float travel = n.motion.lateralDamping > 0.001f ?
+				                         n.motion.lateralSpeed * (1.0f - std::exp(-n.motion.lateralDamping * t)) / n.motion.lateralDamping :
+				                         n.motion.lateralSpeed * t;
+				const float vert = n.launchDir.z * travel + n.motion.riseSpeed * t + 0.5f * n.motion.riseAccel * t * t;
+				peakUp = std::max(peakUp, vert);
+			}
+			n.spread.z += std::max(0.0f, kHeadClearanceUnits - peakUp);
+		}
+
 		BuildText(n);
 	}
 
@@ -203,8 +259,9 @@ namespace FDNG
 	{
 		// Data-driven path: travel along the number's launch direction plus an
 		// independent vertical term. Every built-in effect (Float/Arc/Radial/
-		// Fireworks) is a parameter set fed through this one integrator.
-		const auto& m = Settings::GetSingleton()->motion;
+		// Fireworks) is a parameter set fed through this one integrator. The
+		// profile was resolved (per-kind or global) at spawn.
+		const auto& m = a_number.motion;
 		const float t = a_number.age * Settings::GetSingleton()->globalSpeedMultiplier;
 
 		const float travel = m.lateralDamping > 0.001f ?

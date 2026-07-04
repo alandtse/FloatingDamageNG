@@ -1,0 +1,10 @@
+{
+  "name": "Cascade",
+  "riseSpeed": 70,
+  "riseAccel": -90,
+  "lateralSpeed": 40,
+  "lateralDamping": 1.5,
+  "spreadPattern": 2,
+  "spawnAngle": 55,
+  "description": "Gentle outward drift with a soft settle."
+}

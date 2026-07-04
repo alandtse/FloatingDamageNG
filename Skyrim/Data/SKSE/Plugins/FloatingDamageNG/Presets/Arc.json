@@ -1,0 +1,10 @@
+{
+  "name": "Arc",
+  "riseSpeed": 90,
+  "riseAccel": -220,
+  "lateralSpeed": 55,
+  "lateralDamping": 0,
+  "spreadPattern": 0,
+  "spawnAngle": 0,
+  "description": "Arcs up and out, then falls under gravity."
+}

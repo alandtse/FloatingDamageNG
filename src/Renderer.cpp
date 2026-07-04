@@ -33,10 +33,10 @@ namespace FDNG::Renderer
 		constexpr float kWorldMetersPerPanelPixel = 0.0016875f;
 		// Quads are physically sized, so beyond the reference distance their
 		// angular size drops below HMD readability (an NPC number is ~5 cm -
-		// arc-minutes at a 20 m brawl). Grow them with distance, capped so a
-		// far skirmish reads as a hint rather than a billboard wall.
-		constexpr float kQuadRefDistanceMeters = 3.5f;
-		constexpr float kQuadMaxDistanceBoost = 8.0f;
+		// arc-minutes at a 20 m brawl). They grow with distance, capped so a
+		// far skirmish reads as a hint rather than a billboard wall; the
+		// reference distance and cap are the user's distanceRefMeters /
+		// vrDistanceMaxBoost (flat uses the same reference with a shrink floor).
 		// NPC in-view test margin beyond the screen edges, so head/camera
 		// motion does not pop numbers at the periphery.
 		constexpr float kFrustumMargin = 0.3f;
@@ -123,12 +123,31 @@ namespace FDNG::Renderer
 			a_drawList->AddText(a_font, a_size, a_pos, a_color, a_text);
 		}
 
-		// Draw one number (text + optional mitigation subtext) centered at
-		// a_center.x, starting at a_center.y. Returns the block size drawn.
+		// Squash-and-stretch scale for one number: stretch vertically while it
+		// travels fast (from the motion profile at its current age), easing to
+		// 1:1 as it slows. (1,1) when disabled.
+		ImVec2 StretchScale(const Number& a_n)
+		{
+			const auto settings = Settings::GetSingleton();
+			if (!settings->squashStretch) {
+				return { 1.0f, 1.0f };
+			}
+			const auto& m = a_n.motion;  // per-kind or global, resolved at spawn
+			const float t = a_n.age * settings->globalSpeedMultiplier;
+			const float vy = m.riseSpeed + m.riseAccel * t;
+			const float vlat = m.lateralDamping > 0.001f ? m.lateralSpeed * std::exp(-m.lateralDamping * t) : m.lateralSpeed;
+			const float speed = std::sqrt(vy * vy + vlat * vlat) * settings->globalSpeedMultiplier;
+			constexpr float kRefSpeed = 130.0f;
+			const float k = std::clamp(speed / kRefSpeed, 0.0f, 1.0f) * settings->stretchIntensity;
+			return { 1.0f - 0.30f * k, 1.0f + 0.55f * k };  // squash x, stretch y
+		}
+
+		// Draw one number (text + optional mitigation subtext). Returns the
+		// block extent drawn (including origin marker + any stretch headroom).
 		ImVec2 DrawNumberBlock(ImDrawList* a_drawList, const ResolvedNumber& a_rn, ImVec2 a_topLeft, float a_fontPx)
 		{
 			const auto& n = *a_rn.number;
-			ImFont* font = ImGui::GetFont();
+			ImFont* font = Fonts::ForKind(n.kind);  // per-kind override or the default
 			const float mainPx = a_fontPx;
 			const float subPx = a_fontPx * SubtextRatio(n.amount, n.mitigated);
 
@@ -147,16 +166,26 @@ namespace FDNG::Renderer
 			const ImU32 origin = OriginColor(n.origin, alpha);
 			const float thickness = settings->styleThickness;
 
-			// kOutline: the origin color IS the text outline. Underline/box
-			// keep a thin black outline for legibility and draw the origin
-			// marker as a separate shape. The marker (ring included) must stay
-			// inside the returned extent - in VR anything outside it falls off
-			// the quad - so the metrics pad for the current style.
-			const bool outlineStyle = settings->originStyle == OriginStyle::kOutline;
-			const ImU32 textOutline = outlineStyle ? origin : IM_COL32(0, 0, 0, alpha);
-			const float textThickness = outlineStyle ? thickness : 1.0f;
+			// kOutline colors the glyph ring with the origin; kNone keeps the
+			// same full-thickness ring but black (readable, no source shown);
+			// underline/box use a thin black ring plus a separate marker shape.
+			const bool ringStyle = settings->originStyle == OriginStyle::kOutline || settings->originStyle == OriginStyle::kNone;
+			const ImU32 textOutline = settings->originStyle == OriginStyle::kOutline ? origin : IM_COL32(0, 0, 0, alpha);
+			const float textThickness = ringStyle ? thickness : 1.0f;
 			const auto metrics = ComputeStyleMetrics(settings->originStyle, thickness);
-			const ImVec2 content{ a_topLeft.x + metrics.padX, a_topLeft.y + metrics.padTop };
+
+			// Base block, then reserve stretch headroom so the VR quad (which
+			// samples this exact rect) never clips the enlarged pixels. The
+			// content is drawn centered in the reserved rect and the emitted
+			// vertices are scaled about that center afterward.
+			const ImVec2 baseExtent{ blockSz.x + 2.0f * metrics.padX, metrics.padTop + blockSz.y + metrics.padBottom };
+			const ImVec2 st = StretchScale(n);
+			const ImVec2 extent{ baseExtent.x * std::max(st.x, 1.0f), baseExtent.y * std::max(st.y, 1.0f) };
+			const ImVec2 shift{ (extent.x - baseExtent.x) * 0.5f, (extent.y - baseExtent.y) * 0.5f };
+			const ImVec2 origin2{ a_topLeft.x + shift.x, a_topLeft.y + shift.y };  // base top-left inside reserved rect
+			const ImVec2 content{ origin2.x + metrics.padX, origin2.y + metrics.padTop };
+
+			const int vtxStart = a_drawList->VtxBuffer.Size;
 
 			AddOutlinedText(a_drawList, font, mainPx,
 				ImVec2(content.x + (blockSz.x - mainSz.x) * 0.5f, content.y), color, textOutline, textThickness, n.text);
@@ -175,14 +204,25 @@ namespace FDNG::Renderer
 				break;
 			case OriginStyle::kBox:
 				a_drawList->AddRect(
-					ImVec2(a_topLeft.x + thickness * 0.5f, a_topLeft.y + thickness * 0.5f),
-					ImVec2(a_topLeft.x + blockSz.x + 2.0f * metrics.padX - thickness * 0.5f, a_topLeft.y + metrics.padTop + blockSz.y + metrics.padBottom - thickness * 0.5f),
+					ImVec2(origin2.x + thickness * 0.5f, origin2.y + thickness * 0.5f),
+					ImVec2(origin2.x + blockSz.x + 2.0f * metrics.padX - thickness * 0.5f, origin2.y + metrics.padTop + blockSz.y + metrics.padBottom - thickness * 0.5f),
 					origin, 3.0f, 0, thickness);
 				break;
 			default:
 				break;
 			}
-			return { blockSz.x + 2.0f * metrics.padX, metrics.padTop + blockSz.y + metrics.padBottom };
+
+			if (st.x != 1.0f || st.y != 1.0f) {
+				// Anisotropic scale about the reserved-rect center (ImGui text
+				// draws uniformly, so squash-stretch is a post-transform).
+				const ImVec2 c{ a_topLeft.x + extent.x * 0.5f, a_topLeft.y + extent.y * 0.5f };
+				for (int i = vtxStart; i < a_drawList->VtxBuffer.Size; ++i) {
+					auto& v = a_drawList->VtxBuffer[i].pos;
+					v.x = c.x + (v.x - c.x) * st.x;
+					v.y = c.y + (v.y - c.y) * st.y;
+				}
+			}
+			return extent;
 		}
 
 		// Shared camera pass (flat and VR - the VR camera tracks the HMD):
@@ -288,7 +328,10 @@ namespace FDNG::Renderer
 				// so keep the drawn pixels and the quad in sync by drawing as-is.
 				const float fontPx = BaseFontPx() * rn.scale;
 				const auto metrics = ComputeStyleMetrics(settings->originStyle, settings->styleThickness);
-				const ImVec2 estimate = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
+				// Measure with the SAME font the drawer uses (per-kind override
+				// or default) so the reserved quad matches the drawn glyphs.
+				ImFont* qFont = Fonts::ForKind(rn.number->kind);
+				const ImVec2 estimate = qFont->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
 				// The subtext can be wider than the main text; reserve for it (at
 				// the SAME dynamic ratio the drawer uses) or neighboring quads
 				// sample each other's pixels.
@@ -296,7 +339,7 @@ namespace FDNG::Renderer
 				float blockH = estimate.y;
 				if (rn.number->subtext[0] != '\0') {
 					const float subPx = fontPx * SubtextRatio(rn.number->amount, rn.number->mitigated);
-					const ImVec2 subEstimate = ImGui::GetFont()->CalcTextSizeA(subPx, FLT_MAX, 0.0f, rn.number->subtext);
+					const ImVec2 subEstimate = qFont->CalcTextSizeA(subPx, FLT_MAX, 0.0f, rn.number->subtext);
 					blockW = std::max(blockW, subEstimate.x);
 					blockH += subEstimate.y;
 				}
@@ -319,7 +362,7 @@ namespace FDNG::Renderer
 				rowH = std::max(rowH, blockSz.y);
 
 				const float distMeters = anchorPos.GetDistance(worldPos) * kGameUnitToMeter;
-				const float distanceBoost = std::clamp(distMeters / kQuadRefDistanceMeters, 1.0f, kQuadMaxDistanceBoost);
+				const float distanceBoost = std::clamp(distMeters / settings->distanceRefMeters, 1.0f, settings->vrDistanceMaxBoost);
 				const float heightMeters = blockSz.y * kWorldMetersPerPanelPixel * distanceBoost;
 
 				RE::NiPoint3 quadPos = worldPos;
@@ -404,14 +447,16 @@ namespace FDNG::Renderer
 					}
 					screenPos = ImVec2(displaySize.x * rn.screenX, displaySize.y * (1.0f - rn.screenY));
 
-					// Perspective size: full size inside ~3.5 m, shrinking with
-					// distance.
+					// Perspective size: full size within the reference distance,
+					// shrinking past it but floored so distant (ranged) hits stay
+					// legible.
 					const float distMeters = std::max(playerPos.GetDistance(rn.worldPos) * kGameUnitToMeter, 0.1f);
-					const float perspective = std::clamp(kQuadRefDistanceMeters / distMeters, 0.25f, 1.25f);
+					const float perspective = std::clamp(settings->distanceRefMeters / distMeters, settings->flatDistanceMinScale, 1.25f);
 					fontPx = BaseFontPx() * rn.scale * perspective;
 				}
 
-				const ImVec2 sz = ImGui::GetFont()->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
+				// Center using the same font the drawer picks per kind.
+				const ImVec2 sz = Fonts::ForKind(rn.number->kind)->CalcTextSizeA(fontPx, FLT_MAX, 0.0f, rn.number->text);
 				DrawNumberBlock(drawList, rn, ImVec2(screenPos.x - sz.x * 0.5f, screenPos.y - sz.y), fontPx);
 			}
 

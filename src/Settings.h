@@ -36,14 +36,14 @@ namespace FDNG
 		SpreadPattern spread;
 		float spawnAngleDeg;  // per-hit rotation (kRotate) or diagonal tilt (kDiagonalAlternate)
 	};
-	// Order is the menu combo order; index persists as iSelectedProfile.
-	inline constexpr std::array<EffectPreset, 4> kEffectPresets{ {
+	// The one compiled-in effect: the guaranteed zero-file default and
+	// fallback, so the mod always has a working motion even if the Presets
+	// folder is missing. A plain rise-and-fade matches the genre default
+	// (Floating Damage's mode 0). Everything fancier — Arc, Radial, Fireworks
+	// — ships as a loose JSON preset the user can see, edit, and share, so
+	// each effect has exactly one source of truth (no duplicate picker entry).
+	inline constexpr std::array<EffectPreset, 1> kEffectPresets{ {
 		{ "Float", { 45.0f, 0.0f, 0.0f, 0.0f }, SpreadPattern::kAlternate, 0.0f },
-		{ "Arc", { 90.0f, -220.0f, 55.0f, 0.0f }, SpreadPattern::kAlternate, 0.0f },
-		{ "Radial", { 10.0f, 0.0f, 135.0f, 2.5f }, SpreadPattern::kAlternate, 0.0f },
-		// Fireworks: strong damped burst up-and-out, gravity pulling it back,
-		// each hit rotated by a near-star angle for a spray.
-		{ "Fireworks", { 40.0f, -160.0f, 150.0f, 3.5f }, SpreadPattern::kRotate, 144.0f },
 	} };
 
 	// How a number marks its origin (whose fight it is).
@@ -51,8 +51,30 @@ namespace FDNG
 	{
 		kOutline = 0,    // text outline in the origin color
 		kUnderline = 1,  // thin black outline + origin-colored underline bar
-		kBox = 2         // thin black outline + origin-colored border box
+		kBox = 2,        // thin black outline + origin-colored border box
+		kNone = 3        // plain black outline, no origin color (don't show the source)
 	};
+
+	// Per-damage-kind metadata in DamageKind order — the single source of truth
+	// for the [PerType] INI key suffix and the menu label, so a kind's ordering
+	// and spelling live in one place instead of parallel arrays.
+	struct PerKindMeta
+	{
+		const char* iniSuffix;  // sMotion<suffix> / sFont<suffix>
+		const char* label;      // menu display name
+	};
+	inline constexpr std::array<PerKindMeta, 9> kPerKindMeta{ {
+		{ "Physical", "Physical" },
+		{ "Fire", "Fire" },
+		{ "Frost", "Frost" },
+		{ "Shock", "Shock" },
+		{ "Poison", "Poison" },
+		{ "Magic", "Magic" },
+		{ "Healing", "Healing" },
+		{ "MagickaDrain", "Magicka drain" },
+		{ "StaminaDrain", "Stamina drain" },
+	} };
+	inline constexpr std::size_t kDamageKindCount = kPerKindMeta.size();
 
 	struct Settings
 	{
@@ -77,12 +99,26 @@ namespace FDNG
 		float baseFontPixels{ 48.0f };  // atlas size the numbers draw at before scaling
 		float baseFontScale{ 1.0f };
 		float logScaleModifier{ 0.25f };
-		float maxFontScaleCeiling{ 1.6f };
+		float maxFontScaleCeiling{ 2.5f };  // headroom so big hits keep growing instead of saturating early
+		bool abbreviateNumbers{ false };    // 10000+ only: 12345 -> 12k, 3400000 -> 3.4M
+
+		// [Distance] — how number size responds to how far the target is (the
+		// ranged-attack readability knobs). Reference distance is shared: within
+		// it, numbers are full size. Flat shrinks past it (floored so distant
+		// hits stay legible); VR grows the physical quad past it (capped) to
+		// hold angular size. 1.0 flat floor = never shrink.
+		float distanceRefMeters{ 3.5f };
+		float flatDistanceMinScale{ 0.5f };  // flat: smallest a far number gets
+		float vrDistanceMaxBoost{ 8.0f };    // VR: largest a far quad grows
+		// Squash-and-stretch: distort the number vertically while it moves
+		// fast, easing to normal as it slows (launch "juice"). Opt-in.
+		bool squashStretch{ false };
+		float stretchIntensity{ 0.5f };
 
 		// [KinematicProfiles] — the active spawn effect (a preset copied here,
 		// then freely tuned).
-		int motionPreset{ 1 };  // last-applied preset index (menu default; Arc)
-		MotionProfile motion{ kEffectPresets[1].motion };
+		int motionPreset{ 0 };  // legacy default-seed index (the compiled Float)
+		MotionProfile motion{ kEffectPresets[0].motion };
 		SpreadPattern spreadPattern{ SpreadPattern::kAlternate };
 		float spawnAngleDeg{ 0.0f };  // per-hit rotation / diagonal tilt
 		float globalSpeedMultiplier{ 1.1f };
@@ -100,6 +136,13 @@ namespace FDNG
 		float rapidHitSpread{ 30.0f };
 		float rapidHitBias{ 0.0f };  // -1 all left ... 0 alternate ... +1 all right
 		bool previewMode{ false };   // spawn sample numbers on the selected ref (or player)
+
+		// [PerType] — optional per-damage-kind overrides, indexed by
+		// std::to_underlying(DamageKind); empty = use the global setting.
+		// motionByKind names a preset; fontByKind a TTF/OTF path (absolute, or
+		// relative to the Skyrim folder).
+		std::array<std::string, kDamageKindCount> motionByKind{};
+		std::array<std::string, kDamageKindCount> fontByKind{};
 
 		// [Behavior]
 		bool showMitigation{ true };

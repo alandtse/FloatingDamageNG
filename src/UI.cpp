@@ -17,16 +17,22 @@
 #include <REX/REX.h>
 #include <SKSE/SKSE.h>
 
+#include <shellapi.h>  // ShellExecuteA (WIN32_LEAN_AND_MEAN drops it from Windows.h)
+
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <deque>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -36,6 +42,8 @@ namespace logger = SKSE::log;
 
 #include "CombatLog.h"
 #include "DevBench.h"
+#include "Fonts.h"
+#include "Presets.h"
 #include "Settings.h"
 #include "StyleMetrics.h"
 #include "UI.h"
@@ -97,6 +105,101 @@ namespace FDNG::UI
 			}
 		}
 
+		// Open a folder in Explorer, creating it first so the button always
+		// lands somewhere (the drop-in dirs may not exist yet on a fresh install).
+		void OpenFolder(const char* a_path)
+		{
+			std::error_code ec;
+			std::filesystem::create_directories(a_path, ec);
+			ShellExecuteA(nullptr, "open", a_path, nullptr, nullptr, SW_SHOWNORMAL);
+		}
+
+		// Only http(s) so a shared preset's url can't launch an arbitrary path
+		// or command through ShellExecute.
+		bool IsWebUrl(const std::string& a_url)
+		{
+			return a_url.starts_with("http://") || a_url.starts_with("https://");
+		}
+
+		void OpenUrl(const std::string& a_url)
+		{
+			if (IsWebUrl(a_url)) {
+				ShellExecuteA(nullptr, "open", a_url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+			}
+		}
+
+		// A clickable link: link-blue text that opens the URL in the browser.
+		void LinkText(const std::string& a_url)
+		{
+			ImGuiMCP::TextColored(ImGuiMCP::ImVec4{ 0.36f, 0.66f, 1.0f, 1.0f }, "%s", a_url.c_str());
+			if (ImGuiMCP::IsItemClicked(0)) {
+				OpenUrl(a_url);
+			}
+			if (ImGuiMCP::IsItemHovered(0)) {
+				ImGuiMCP::SetTooltip("Open in browser");
+			}
+		}
+
+		// The preset the live motion fields currently equal (nullptr = none).
+		// Returns the whole Effect so the panel can show its name plus the
+		// description/attribution, not just a label.
+		const Presets::Effect* MatchingPreset(const Settings* a_s, const std::vector<Presets::Effect>& a_presets)
+		{
+			for (const auto& p : a_presets) {
+				if (std::fabs(p.motion.riseSpeed - a_s->motion.riseSpeed) < 0.5f &&
+					std::fabs(p.motion.riseAccel - a_s->motion.riseAccel) < 0.5f &&
+					std::fabs(p.motion.lateralSpeed - a_s->motion.lateralSpeed) < 0.5f &&
+					std::fabs(p.motion.lateralDamping - a_s->motion.lateralDamping) < 0.05f &&
+					p.spread == a_s->spreadPattern &&
+					std::fabs(p.spawnAngleDeg - a_s->spawnAngleDeg) < 0.5f) {
+					return &p;
+				}
+			}
+			return nullptr;
+		}
+
+		bool IContains(const char* a_hay, const char* a_needle)
+		{
+			if (!a_needle || !a_needle[0]) {
+				return true;
+			}
+			const std::string_view hay{ a_hay };
+			const auto it = std::search(hay.begin(), hay.end(), a_needle, a_needle + std::strlen(a_needle),
+				[](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
+			return it != hay.end();
+		}
+
+		// A combo whose popup carries a type-to-filter box — for long lists
+		// (fonts, combatants) a plain dropdown can't scan. Returns true and
+		// updates a_index when a row is picked.
+		bool SearchableCombo(const char* a_label, int* a_index, const std::vector<const char*>& a_options)
+		{
+			const char* preview = (*a_index >= 0 && *a_index < static_cast<int>(a_options.size())) ? a_options[*a_index] : "";
+			if (!ImGuiMCP::BeginCombo(a_label, preview, 0)) {
+				return false;
+			}
+			// One popup is open at a time, so a shared buffer is fine; reset
+			// and focus it when the popup first appears.
+			static char s_filter[64]{};
+			if (ImGuiMCP::IsWindowAppearing()) {
+				s_filter[0] = '\0';
+				ImGuiMCP::SetKeyboardFocusHere(0);
+			}
+			ImGuiMCP::InputTextWithHint("##fdng_combofilter", "Type to filter...", s_filter, sizeof(s_filter), 0, nullptr, nullptr);
+			bool changed = false;
+			for (int i = 0; i < static_cast<int>(a_options.size()); ++i) {
+				if (!IContains(a_options[static_cast<std::size_t>(i)], s_filter)) {
+					continue;
+				}
+				if (ImGuiMCP::Selectable(a_options[static_cast<std::size_t>(i)], i == *a_index, 0, { 0, 0 })) {
+					*a_index = i;
+					changed = true;
+				}
+			}
+			ImGuiMCP::EndCombo();
+			return changed;
+		}
+
 		std::uint32_t ToImCol(std::uint32_t a_rgb, std::uint8_t a_alpha = 0xFF)
 		{
 			// ImU32 is ABGR-packed.
@@ -137,9 +240,9 @@ namespace FDNG::UI
 			for (const auto& sm : samples) {
 				const auto fill = ToImCol(sm.fill);
 				const auto marker = ToImCol(sm.marker);
-				const bool outline = s->originStyle == OriginStyle::kOutline;
-				const auto textOutline = outline ? marker : ToImCol(0x000000);
-				const float tt = outline ? t : 1.0f;
+				const bool ringStyle = s->originStyle == OriginStyle::kOutline || s->originStyle == OriginStyle::kNone;
+				const auto textOutline = s->originStyle == OriginStyle::kOutline ? marker : ToImCol(0x000000);
+				const float tt = ringStyle ? t : 1.0f;
 				for (const auto& o : kRingOffsets) {
 					ImGuiMCP::ImDrawListManager::AddText(dl, { x + o[0] * tt, y + o[1] * tt }, textOutline, sm.text);
 				}
@@ -160,9 +263,67 @@ namespace FDNG::UI
 			ImGuiMCP::Dummy({ w, h + 6.0f });
 		}
 
-		void __stdcall RenderSettings()
+		// Shared Save / Reload / Reset row shown at the bottom of every
+		// settings page (all act on the one Settings singleton).
+		void SaveRow(Settings* a_settings)
+		{
+			ImGuiMCP::Separator();
+			if (ImGuiMCP::Button("Save to INI", { 0, 0 })) {
+				a_settings->Save();
+			}
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
+				a_settings->Load();
+			}
+			// Reset is destructive and sits next to Save/Reload, so gate it
+			// behind a second click. Clear a pending confirm when the page is
+			// reopened, so it can't fire on a stale click from last time.
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			static bool s_confirmReset = false;
+			if (ImGuiMCP::IsWindowAppearing()) {
+				s_confirmReset = false;
+			}
+			if (!s_confirmReset) {
+				if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
+					s_confirmReset = true;
+				}
+			} else {
+				if (ImGuiMCP::Button("Confirm reset", { 0, 0 })) {
+					a_settings->ResetToDefaults();
+					s_confirmReset = false;
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Cancel", { 0, 0 })) {
+					s_confirmReset = false;
+				}
+			}
+			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
+		}
+
+		// "Numbers" page: everything about how the numbers look and move.
+		void __stdcall RenderNumbers()
 		{
 			auto* s = Settings::GetSingleton();
+
+			// Live preview up top: it exercises everything below (motion,
+			// font, colors, offset), so it isn't specific to any one section.
+			ImGuiMCP::Checkbox("Live preview", &s->previewMode);
+			ImGuiMCP::SameLine(0.0f, -1.0f);
+			if (s->previewMode) {
+				const char* target = "you (no target selected)";
+				if (const auto sel = RE::Console::GetSelectedRef()) {
+					if (const char* nm = sel->GetName(); nm && nm[0]) {
+						target = nm;
+					} else {
+						target = "selected reference";
+					}
+				}
+				ImGuiMCP::Text("- spawning sample numbers on: %s", target);
+				Tip("Open the console and click an NPC (or 'prid <FormID>') to target it; otherwise it falls back to you.");
+			} else {
+				ImGuiMCP::TextDisabled("- sample numbers to tune motion/font/colors live");
+			}
+			ImGuiMCP::Separator();
 
 			if (ImGuiMCP::CollapsingHeader("What to show", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGuiMCP::Checkbox("Your damage", &s->showPlayerDamageDealt);
@@ -186,34 +347,111 @@ namespace FDNG::UI
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Size", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				// Font choice: "(auto)" plus every TTF/OTF found in the user
+				// drop-in folder, the mod's font folder, and Windows\Fonts. A
+				// change applies on restart (the atlas is baked once per context).
+				const auto& avail = Fonts::Available();
+				std::vector<const char*> fontNames;
+				fontNames.reserve(avail.size() + 1);
+				fontNames.push_back("(auto)");
+				int fontSel = 0;
+				for (int i = 0; i < static_cast<int>(avail.size()); ++i) {
+					fontNames.push_back(avail[static_cast<std::size_t>(i)].first.c_str());
+					if (avail[static_cast<std::size_t>(i)].second == s->fontPath) {
+						fontSel = i + 1;
+					}
+				}
+				if (SearchableCombo("Font", &fontSel, fontNames)) {
+					s->fontPath = fontSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fontSel - 1)].second;
+				}
+				Tip("Type to filter your installed fonts. Applies on game restart; (auto) uses the mod font, then a bold Windows system font.");
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				ImGuiMCP::TextDisabled("(restart)");
+				if (ImGuiMCP::Button("Open fonts folder", { 0, 0 })) {
+					OpenFolder("Data/SKSE/Plugins/FloatingDamageNG/Fonts");
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Rescan", { 0, 0 })) {
+					Fonts::RefreshAvailable();
+				}
+				Tip("Drop .ttf/.otf files in the folder, click Rescan to list them here. A picked font takes effect on the next game start.");
 				ImGuiMCP::SliderFloat("Font size (px)", &s->baseFontPixels, 16.0f, 128.0f, "%.0f", 0);
 				Tip("The atlas resolution numbers rasterize at. Higher = crisper and larger; applies immediately.");
-				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.5f, 2.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Size multiplier", &s->baseFontScale, 0.1f, 3.0f, "%.2f", 0);
+				Tip("Overall number size. The final size is capped by 'Max size multiplier' below.");
 				ImGuiMCP::SliderFloat("Big hits grow by", &s->logScaleModifier, 0.0f, 1.0f, "%.2f", 0);
 				Tip("How much larger high-damage numbers render (logarithmic in the damage). 0 = all numbers equal size.");
-				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 3.0f, "%.2f", 0);
+				ImGuiMCP::SliderFloat("Max size multiplier", &s->maxFontScaleCeiling, 1.0f, 4.0f, "%.2f", 0);
+				Tip("Ceiling on the final size. Kept at or above the base multiplier so raising the base always has an effect.");
+				// The base scale feeds the same clamp as the magnitude bonus, so a
+				// ceiling below the base would silently cap it — keep them ordered.
+				s->maxFontScaleCeiling = std::max(s->maxFontScaleCeiling, s->baseFontScale);
+				ImGuiMCP::Checkbox("Abbreviate big numbers", &s->abbreviateNumbers);
+				Tip("Show 10000+ as 1.2k / 3.4M to keep late-game numbers compact.");
+
+				ImGuiMCP::SeparatorText("Distance");
+				ImGuiMCP::TextDisabled("How size responds to how far the target is (ranged readability).");
+				ImGuiMCP::SliderFloat("Reference distance (m)", &s->distanceRefMeters, 1.0f, 30.0f, "%.1f", 0);
+				Tip("Numbers are full size within this range. Raise it to keep numbers big further out (e.g. for bows).");
+				// Only the running platform's control is shown; the other has no
+				// effect on this instance.
+				if (REL::Module::IsVR()) {
+					ImGuiMCP::SliderFloat("Max size boost at distance", &s->vrDistanceMaxBoost, 1.0f, 16.0f, "%.1f", 0);
+					Tip("How much far numbers grow to stay readable at range. Higher = bigger distant numbers.");
+				} else {
+					ImGuiMCP::SliderFloat("Min size at distance", &s->flatDistanceMinScale, 0.1f, 1.5f, "%.2f", 0);
+					Tip("How small a far number may shrink. 1.0 = never shrinks. Raise this if ranged numbers look too small.");
+				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Motion effect", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
-				// A preset just copies its bundle into the live fields; tune from there.
-				int preset = s->motionPreset;
-				const char* presetNames[] = { "Float", "Arc", "Radial", "Fireworks" };
-				if (ImGuiMCP::Combo("Preset", &preset, presetNames, 4, -1)) {
-					s->motionPreset = preset;
-					const auto& p = kEffectPresets[static_cast<std::size_t>(preset)];
-					s->motion = p.motion;
-					s->spreadPattern = p.spread;
-					s->spawnAngleDeg = p.spawnAngleDeg;
+				// A preset (built-in or a shared JSON file) copies its bundle
+				// into the live fields; tune from there.
+				const auto& presets = Presets::All();
+				// The preview tracks the live fields: it names the preset they
+				// currently equal, or "<last loaded> (modified)" once tuned, so
+				// the combo never claims a preset that isn't actually active.
+				static std::string lastLoaded;
+				const Presets::Effect* match = MatchingPreset(s, presets);
+				std::string preview;
+				if (match) {
+					preview = match->name;
+				} else if (!lastLoaded.empty()) {
+					preview = std::format("{} (modified)", lastLoaded);
+				} else {
+					preview = "Custom";
 				}
-				Tip("A starting point. Editing any slider below customizes it; the built-ins are defined the same way.");
-				ImGuiMCP::SliderFloat("Rise speed", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
-				Tip("Upward velocity. Negative sinks.");
-				ImGuiMCP::SliderFloat("Rise accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
-				Tip("Vertical acceleration. Negative = gravity (arc/fireworks fall back down).");
-				ImGuiMCP::SliderFloat("Launch speed", &s->motion.lateralSpeed, 0.0f, 250.0f, "%.0f", 0);
-				Tip("Velocity along the launch direction (sideways/outward).");
-				ImGuiMCP::SliderFloat("Launch damping", &s->motion.lateralDamping, 0.0f, 12.0f, "%.1f", 0);
-				Tip("0 = travels at constant speed; higher = bursts out then eases to a stop (Radial/Fireworks feel).");
+				if (ImGuiMCP::BeginCombo("Preset", preview.c_str(), 0)) {
+					for (const auto& p : presets) {
+						if (ImGuiMCP::Selectable(p.name.c_str(), false, 0, { 0, 0 })) {
+							s->motion = p.motion;
+							s->spreadPattern = p.spread;
+							s->spawnAngleDeg = p.spawnAngleDeg;
+							lastLoaded = p.name;
+						}
+					}
+					ImGuiMCP::EndCombo();
+				}
+				Tip("Load a starting point (built-ins plus any JSON in Data/SKSE/Plugins/FloatingDamageNG/Presets), then tune the sliders. Built-ins are defined the same way.");
+				// Description/attribution of the active preset, shown persistently
+				// on the panel (not just on hover in the dropdown).
+				if (match && !match->description.empty()) {
+					ImGuiMCP::TextDisabled("%s", match->description.c_str());
+				}
+				if (match && !match->source.empty()) {
+					ImGuiMCP::TextDisabled("Source: %s", match->source.c_str());
+				}
+				if (match && IsWebUrl(match->url)) {
+					LinkText(match->url);
+				}
+				ImGuiMCP::SliderFloat("Rise speed (units/s)", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
+				Tip("How fast a number rises. Negative makes it sink.");
+				ImGuiMCP::SliderFloat("Vertical accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
+				Tip("Negative = gravity: arcs the number up then pulls it back down (arc/fireworks). Positive = accelerates upward. 0 = steady rise.");
+				ImGuiMCP::SliderFloat("Launch speed (units/s)", &s->motion.lateralSpeed, 0.0f, 250.0f, "%.0f", 0);
+				Tip("How fast a number shoots sideways / outward.");
+				ImGuiMCP::SliderFloat("Slowdown", &s->motion.lateralDamping, 0.0f, 20.0f, "%.1f", 0);
+				Tip("0 = keeps its speed; higher = bursts out fast then coasts to a stop (Radial/Fireworks feel).");
 
 				int pattern = static_cast<int>(s->spreadPattern);
 				const char* patterns[] = { "Alternate (left/right)", "Rotate (fireworks)", "Diagonal alternate" };
@@ -225,23 +463,125 @@ namespace FDNG::UI
 					ImGuiMCP::SliderFloat("Rapid-hit spacing", &s->rapidHitSpread, 0.0f, 120.0f, "%.0f", 0);
 					ImGuiMCP::SliderFloat("Side bias", &s->rapidHitBias, -1.0f, 1.0f, "%.2f", 0);
 					Tip("-1 all left, 0 even alternation, +1 all right.");
+				} else if (s->spreadPattern == SpreadPattern::kRotate) {
+					ImGuiMCP::SliderFloat("Rotation per hit (deg)", &s->spawnAngleDeg, 0.0f, 360.0f, "%.0f", 0);
+					Tip("Degrees each successive number turns around the target (144 = a 5-point star spray).");
 				} else {
-					ImGuiMCP::SliderFloat("Angle per hit / tilt", &s->spawnAngleDeg, 0.0f, 180.0f, "%.0f", 0);
-					Tip("Rotate: degrees each successive number turns around the target. Diagonal: launch tilt above horizontal.");
+					ImGuiMCP::SliderFloat("Diagonal tilt (deg)", &s->spawnAngleDeg, 0.0f, 90.0f, "%.0f", 0);
+					Tip("Launch tilt above horizontal for the alternating diagonals.");
 				}
 
+				ImGuiMCP::Checkbox("Squash and stretch", &s->squashStretch);
+				Tip("Distort numbers vertically while they fly fast, easing to normal as they settle (launch juice).");
+				if (s->squashStretch) {
+					ImGuiMCP::SliderFloat("Stretch amount", &s->stretchIntensity, 0.0f, 1.0f, "%.2f", 0);
+				}
 				ImGuiMCP::SliderFloat("Speed", &s->globalSpeedMultiplier, 0.25f, 3.0f, "%.2f", 0);
+				Tip("Scales how fast the whole animation plays - including how fast it ages, so a higher speed also fades numbers sooner. Raise Lifetime to keep them on screen as long.");
 				ImGuiMCP::SliderFloat("Lifetime (s)", &s->quadLifetimeSeconds, 0.5f, 4.0f, "%.2f", 0);
+
+				// Save the current path as a shareable JSON preset file, with
+				// optional description/attribution so users can annotate and
+				// credit without hand-editing JSON.
+				ImGuiMCP::Separator();
+				static char presetName[48]{};
+				static char presetDesc[128]{};
+				static char presetSrc[128]{};
+				static char presetUrl[192]{};
+				static std::string saveMsg;
+				if (ImGuiMCP::InputTextWithHint("##fdng_preset_name", "Preset name to save...", presetName, sizeof(presetName), 0, nullptr, nullptr)) {
+					saveMsg.clear();  // stop showing a stale result once they edit the name
+				}
+				ImGuiMCP::InputTextWithHint("##fdng_preset_desc", "Description (optional)", presetDesc, sizeof(presetDesc), 0, nullptr, nullptr);
+				ImGuiMCP::InputTextWithHint("##fdng_preset_src", "Source / credit (optional)", presetSrc, sizeof(presetSrc), 0, nullptr, nullptr);
+				ImGuiMCP::InputTextWithHint("##fdng_preset_url", "Link (http/https, optional)", presetUrl, sizeof(presetUrl), 0, nullptr, nullptr);
+				if (ImGuiMCP::Button("Save preset", { 0, 0 }) && presetName[0]) {
+					// Keep the typed fields on failure so they aren't lost.
+					if (Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg, presetDesc, presetSrc, presetUrl })) {
+						saveMsg = std::format("Saved '{}'.", presetName);
+						presetName[0] = presetDesc[0] = presetSrc[0] = presetUrl[0] = '\0';
+					} else {
+						saveMsg = "Save failed - use a unique name (letters, numbers, spaces, - or _; not a built-in).";
+					}
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Reload presets", { 0, 0 })) {
+					Presets::Reload();
+				}
+				ImGuiMCP::SameLine(0.0f, -1.0f);
+				if (ImGuiMCP::Button("Open folder", { 0, 0 })) {
+					OpenFolder("Data/SKSE/Plugins/FloatingDamageNG/Presets");
+				}
+				if (!saveMsg.empty()) {
+					ImGuiMCP::TextDisabled("%s", saveMsg.c_str());
+				} else {
+					ImGuiMCP::TextDisabled("Saved to Data/SKSE/Plugins/FloatingDamageNG/Presets - share the .json to trade effects.");
+				}
+			}
+
+			if (ImGuiMCP::CollapsingHeader("Per-type effects", 0)) {
+				ImGuiMCP::TextDisabled("Give a damage type its own motion and/or font (e.g. fire sprays, frost drifts). (global) uses the settings above; a font change applies on restart.");
+				const auto& presets = Presets::All();
+				std::vector<const char*> motionOpts{ "(global)" };
+				for (const auto& p : presets) {
+					motionOpts.push_back(p.name.c_str());
+				}
+				const auto& avail = Fonts::Available();
+				std::vector<const char*> fontOpts{ "(global)" };
+				for (const auto& f : avail) {
+					fontOpts.push_back(f.first.c_str());
+				}
+				constexpr auto tblFlags = ImGuiMCP::ImGuiTableFlags_RowBg | ImGuiMCP::ImGuiTableFlags_BordersInnerH | ImGuiMCP::ImGuiTableFlags_SizingStretchProp;
+				if (ImGuiMCP::BeginTable("##fdng_pertype", 3, tblFlags, { 0, 0 }, 0.0f)) {
+					ImGuiMCP::TableSetupColumn("Damage type", 0, 0.30f, 0);
+					ImGuiMCP::TableSetupColumn("Motion", 0, 0.35f, 0);
+					ImGuiMCP::TableSetupColumn("Font (restart)", 0, 0.35f, 0);
+					ImGuiMCP::TableHeadersRow();
+					for (std::size_t idx = 0; idx < kPerKindMeta.size(); ++idx) {
+						const int i = static_cast<int>(idx);
+						ImGuiMCP::TableNextRow(0, 0.0f);
+						ImGuiMCP::TableSetColumnIndex(0);
+						ImGuiMCP::Text("%s", kPerKindMeta[idx].label);
+
+						ImGuiMCP::TableSetColumnIndex(1);
+						ImGuiMCP::SetNextItemWidth(-1.0f);
+						int mSel = 0;
+						for (int j = 0; j < static_cast<int>(presets.size()); ++j) {
+							if (presets[static_cast<std::size_t>(j)].name == s->motionByKind[idx]) {
+								mSel = j + 1;
+								break;
+							}
+						}
+						const auto mId = std::format("##fdng_km{}", i);
+						if (SearchableCombo(mId.c_str(), &mSel, motionOpts)) {
+							s->motionByKind[idx] = mSel == 0 ? std::string{} : presets[static_cast<std::size_t>(mSel - 1)].name;
+						}
+
+						ImGuiMCP::TableSetColumnIndex(2);
+						ImGuiMCP::SetNextItemWidth(-1.0f);
+						int fSel = 0;
+						for (int j = 0; j < static_cast<int>(avail.size()); ++j) {
+							if (avail[static_cast<std::size_t>(j)].second == s->fontByKind[idx]) {
+								fSel = j + 1;
+								break;
+							}
+						}
+						const auto fId = std::format("##fdng_kf{}", i);
+						if (SearchableCombo(fId.c_str(), &fSel, fontOpts)) {
+							s->fontByKind[idx] = fSel == 0 ? std::string{} : avail[static_cast<std::size_t>(fSel - 1)].second;
+						}
+					}
+					ImGuiMCP::EndTable();
+				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Spawn origin", 0)) {
-				ImGuiMCP::SliderFloat("Offset up", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
-				ImGuiMCP::SliderFloat("Offset toward you", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
-				ImGuiMCP::SliderFloat("Offset sideways", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
-				Tip("Shift where numbers spawn relative to the target's head, in a view-relative frame (game units).");
-				if (ImGuiMCP::Checkbox("Live preview on target", &s->previewMode)) {
-				}
-				Tip("Spawns sample numbers on your console-selected target (open the console and click an NPC, or 'prid <id>'); falls back to you. Tune motion/offset/font and watch it live.");
+				ImGuiMCP::SliderFloat("Offset up (game units)", &s->originOffsetUp, -80.0f, 120.0f, "%.0f", 0);
+				Tip("Shift the spawn point relative to the target's head (~70 game units = 1 m). Use Live preview at the top to see it.");
+				ImGuiMCP::SliderFloat("Offset toward you (game units)", &s->originOffsetToward, -80.0f, 80.0f, "%.0f", 0);
+				Tip("Shift the spawn point relative to the target's head (~70 game units = 1 m). Use Live preview at the top to see it.");
+				ImGuiMCP::SliderFloat("Offset sideways (game units)", &s->originOffsetSide, -80.0f, 80.0f, "%.0f", 0);
+				Tip("Shift the spawn point relative to the target's head (~70 game units = 1 m). Use Live preview at the top to see it.");
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Thresholds", 0)) {
@@ -255,19 +595,29 @@ namespace FDNG::UI
 
 			if (ImGuiMCP::CollapsingHeader("Colors and style", 0)) {
 				int style = static_cast<int>(s->originStyle);
-				const char* styles[] = { "Colored outline", "Underline", "Box" };
-				if (ImGuiMCP::Combo("Origin marker", &style, styles, 3, -1)) {
+				const char* styles[] = { "Colored outline", "Underline", "Box", "None (hide source)" };
+				if (ImGuiMCP::Combo("Origin marker", &style, styles, 4, -1)) {
 					s->originStyle = static_cast<OriginStyle>(style);
 				}
 				Tip("How a number shows whose fight it is. The number's own color always means the damage type; the marker uses the four 'Marker' colors below.");
 				ImGuiMCP::SliderFloat("Marker thickness", &s->styleThickness, 0.5f, 6.0f, "%.1f", 0);
 				DrawStylePreview(s);
+				ImGuiMCP::TextDisabled("Preview shows colors and marker style only (menu font, not your chosen game font).");
 				for (const auto& def : kColorTable) {
 					ColorRow(def.uiLabel, s->*def.field);
 				}
 			}
 
-			if (ImGuiMCP::CollapsingHeader("Analytics", 0)) {
+			SaveRow(s);
+		}
+
+		// "Analytics & Debug" page: the combat-log capture module (whose data
+		// the Combat Stats page browses) plus diagnostics.
+		void __stdcall RenderAnalytics()
+		{
+			auto* s = Settings::GetSingleton();
+
+			if (ImGuiMCP::CollapsingHeader("Analytics", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGuiMCP::Checkbox("Combat log", &s->enableCombatLog);
 				Tip("Track each fight: per-combatant damage, healing, crits, time-to-die, DPS. Feeds the Combat Stats page.");
 				ImGuiMCP::BeginDisabled(!s->enableCombatLog);
@@ -306,19 +656,7 @@ namespace FDNG::UI
 				Tip("Once a second, compares each fighter's observed health change against captured events and warns in the log about damage the mod missed.");
 			}
 
-			ImGuiMCP::Separator();
-			if (ImGuiMCP::Button("Save to INI", { 0, 0 })) {
-				s->Save();
-			}
-			ImGuiMCP::SameLine(0.0f, -1.0f);
-			if (ImGuiMCP::Button("Reload INI", { 0, 0 })) {
-				s->Load();
-			}
-			ImGuiMCP::SameLine(0.0f, -1.0f);
-			if (ImGuiMCP::Button("Reset to defaults", { 0, 0 })) {
-				s->ResetToDefaults();
-			}
-			ImGuiMCP::TextDisabled("Changes apply immediately; Save writes them to the INI. Font changes need a restart.");
+			SaveRow(s);
 		}
 
 		bool NameMatchesFilter(const std::string& a_name, const char* a_filter)
@@ -486,7 +824,7 @@ namespace FDNG::UI
 				names.push_back(c.name.c_str());
 			}
 			const auto comboID = std::format("Drill-down###fdng_drill{}", a_session.index);
-			ImGuiMCP::Combo(comboID.c_str(), &sel, names.data(), static_cast<int>(names.size()), -1);
+			SearchableCombo(comboID.c_str(), &sel, names);
 
 			const auto& c = a_session.combatants[static_cast<std::size_t>(sel)];
 
@@ -554,8 +892,9 @@ namespace FDNG::UI
 			logger::info("SKSE Menu Framework not installed; in-game config UI disabled.");
 			return;
 		}
-		SKSEMenuFramework::SetSection("FloatingDamageNG");
-		SKSEMenuFramework::AddSectionItem("Settings", RenderSettings);
+		SKSEMenuFramework::SetSection("Floating Damage NG");
+		SKSEMenuFramework::AddSectionItem("Numbers", RenderNumbers);
+		SKSEMenuFramework::AddSectionItem("Analytics & Debug", RenderAnalytics);
 		SKSEMenuFramework::AddSectionItem("Combat Stats", RenderStats);
 		logger::info("Registered SMF pages (framework v{:.1f}).", SKSEMenuFramework::GetMenuFrameworkVersion());
 	}

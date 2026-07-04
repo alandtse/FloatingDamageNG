@@ -1,0 +1,12 @@
+{
+  "name": "Freeze",
+  "riseSpeed": 0,
+  "riseAccel": 0,
+  "lateralSpeed": 0,
+  "lateralDamping": 0,
+  "spreadPattern": 0,
+  "spawnAngle": 0,
+  "description": "Holds in place and fades (no movement).",
+  "source": "Inspired by Floating Damage display modes",
+  "url": "https://www.nexusmods.com/skyrimspecialedition/mods/14332"
+}

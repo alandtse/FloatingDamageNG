@@ -66,6 +66,13 @@ namespace FDNG
 		baseFontScale = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale));
 		logScaleModifier = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier));
 		maxFontScaleCeiling = static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling));
+		abbreviateNumbers = ini.GetBoolValue("DynamicSizing", "bAbbreviateNumbers", abbreviateNumbers);
+		squashStretch = ini.GetBoolValue("DynamicSizing", "bSquashStretch", squashStretch);
+		stretchIntensity = std::clamp(static_cast<float>(ini.GetDoubleValue("DynamicSizing", "fStretchIntensity", stretchIntensity)), 0.0f, 1.0f);
+
+		distanceRefMeters = std::clamp(static_cast<float>(ini.GetDoubleValue("Distance", "fReferenceMeters", distanceRefMeters)), 1.0f, 30.0f);
+		flatDistanceMinScale = std::clamp(static_cast<float>(ini.GetDoubleValue("Distance", "fFlatMinScale", flatDistanceMinScale)), 0.1f, 1.5f);
+		vrDistanceMaxBoost = std::clamp(static_cast<float>(ini.GetDoubleValue("Distance", "fVRMaxBoost", vrDistanceMaxBoost)), 1.0f, 16.0f);
 
 		// Seed the active motion path from the last-applied preset, then let
 		// explicit fields override — so a legacy INI (preset index only) still
@@ -91,12 +98,19 @@ namespace FDNG
 		rapidHitBias = std::clamp(static_cast<float>(ini.GetDoubleValue("Origin", "fRapidHitBias", rapidHitBias)), -1.0f, 1.0f);
 		// previewMode is intentionally NOT persisted — it is a live tuning aid.
 
+		for (std::size_t i = 0; i < kPerKindMeta.size(); ++i) {
+			const char* motionOverride = ini.GetValue("PerType", std::format("sMotion{}", kPerKindMeta[i].iniSuffix).c_str());
+			motionByKind[i] = motionOverride ? motionOverride : "";
+			const char* fontOverride = ini.GetValue("PerType", std::format("sFont{}", kPerKindMeta[i].iniSuffix).c_str());
+			fontByKind[i] = fontOverride ? fontOverride : "";
+		}
+
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
 		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
 
-		originStyle = static_cast<OriginStyle>(std::clamp<long>(ini.GetLongValue("Style", "iOriginStyle", std::to_underlying(originStyle)), 0, 2));
+		originStyle = static_cast<OriginStyle>(std::clamp<long>(ini.GetLongValue("Style", "iOriginStyle", std::to_underlying(originStyle)), 0, 3));
 		styleThickness = std::clamp(static_cast<float>(ini.GetDoubleValue("Style", "fStyleThickness", styleThickness)), 0.5f, 6.0f);
 
 		for (const auto& def : kColorTable) {
@@ -191,6 +205,13 @@ namespace FDNG
 		ini.SetDoubleValue("DynamicSizing", "fBaseFontScale", baseFontScale);
 		ini.SetDoubleValue("DynamicSizing", "fLogScaleModifier", logScaleModifier);
 		ini.SetDoubleValue("DynamicSizing", "fMaxFontScaleCeiling", maxFontScaleCeiling);
+		ini.SetBoolValue("DynamicSizing", "bAbbreviateNumbers", abbreviateNumbers);
+		ini.SetBoolValue("DynamicSizing", "bSquashStretch", squashStretch);
+		ini.SetDoubleValue("DynamicSizing", "fStretchIntensity", stretchIntensity);
+
+		ini.SetDoubleValue("Distance", "fReferenceMeters", distanceRefMeters);
+		ini.SetDoubleValue("Distance", "fFlatMinScale", flatDistanceMinScale);
+		ini.SetDoubleValue("Distance", "fVRMaxBoost", vrDistanceMaxBoost);
 
 		ini.SetValue("Font", "sFontPath", fontPath.c_str());
 
@@ -219,6 +240,11 @@ namespace FDNG
 		ini.SetDoubleValue("Origin", "fOffsetSide", originOffsetSide);
 		ini.SetDoubleValue("Origin", "fRapidHitSpread", rapidHitSpread);
 		ini.SetDoubleValue("Origin", "fRapidHitBias", rapidHitBias);
+
+		for (std::size_t i = 0; i < kPerKindMeta.size(); ++i) {
+			ini.SetValue("PerType", std::format("sMotion{}", kPerKindMeta[i].iniSuffix).c_str(), motionByKind[i].c_str());
+			ini.SetValue("PerType", std::format("sFont{}", kPerKindMeta[i].iniSuffix).c_str(), fontByKind[i].c_str());
+		}
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
