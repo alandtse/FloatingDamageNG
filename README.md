@@ -30,24 +30,29 @@ armor)`, `(-30 blocked)` with the true blocked amount, or `(-20 resisted)` —
 - Player-received damage and healing: over your head in third person, pinned
   to a configurable screen spot in first person (flat), anchored ~1 m ahead at
   chest height in VR.
-- **Fully tunable motion**, presets included: Float, Arc (parabolic), Radial
-  burst, and Fireworks (rotating diagonal spray). A preset seeds a small set
-  of physics knobs — rise speed, gravity, launch speed, damping, plus the
-  spread pattern (alternate / rotate / diagonal) and per-hit angle — that you
-  can freely edit; the built-ins are defined the exact same way, a custom
-  effect **saves to a shareable JSON preset file** you can trade. Optional
-  number abbreviation (`1.2k`) and squash-and-stretch launch juice. Font
-  (picked in-game from your installed TTFs), size, base scale, and how much
-  big hits grow are all controls, and the spawn point can be nudged up /
-  toward you / sideways. A **live preview** spawns sample numbers on your
-  console-selected target (`prid`, falling back to you) so you can tune it
-  all in real time. Any damage type can also get **its own effect and font**
-  — fire sprays while frost drifts — the same way it already gets its own
-  color.
-- **Whose fight it is** reads from a selectable origin marker — colored text
-  outline, underline, or box (your hits black, damage you take red, follower
+- **Data-driven motion.** An effect is a set of physics values (rise speed,
+  gravity, launch speed, damping, spread pattern, per-hit angle); a preset is
+  just saved values. Float is the built-in default; Arc, Radial, Fireworks,
+  and Freeze/Accelerate/Bound/Drop ship as editable JSON in
+  `Data/SKSE/Plugins/FloatingDamageNG/Presets`. The current effect saves back
+  to a JSON file to share, and you can edit or drop in your own. Presets carry
+  an optional description and attribution shown in the picker.
+- **Per damage type.** Any damage type can take its own motion preset and
+  font, the same way it takes its own color (e.g. fire sprays while frost
+  drifts).
+- **Fonts.** Chosen in-game from the TTF/OTF files in a `Fonts` drop-in folder
+  and the Windows font directory, globally or per type. A change applies on
+  the next game start (the glyph atlas is baked once per context).
+- **Sizing.** A base pixel size, a multiplier, and log-scaled growth for large
+  hits, plus distance controls (a reference distance, and a flat shrink floor
+  or a VR growth cap) so distant hits stay readable at range. Optional `1.2k`
+  abbreviation and squash-and-stretch. A live preview spawns sample numbers on
+  a console-selected target (`prid`, else the player); the spawn point can be
+  offset up, toward you, or sideways.
+- **Origin marker** shows whose fight a number is: a colored text outline,
+  underline, box, or none (your hits black, damage you take red, follower
   damage blue, bystander fights gray; all themable, with a live preview in the
-  menu) — and follower/NPC-vs-NPC numbers render smaller and distance-culled.
+  menu). Follower and NPC-vs-NPC numbers render smaller and are distance-culled.
 - **Combat analytics** (optional): each fight is logged as a session — per
   combatant damage dealt/taken, healing, crits, time-to-die, who fled — with
   real, active, and peak DPS. Per-combatant drill-downs show damage **by
