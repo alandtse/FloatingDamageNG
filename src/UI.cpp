@@ -113,6 +113,32 @@ namespace FDNG::UI
 			ShellExecuteA(nullptr, "open", a_path, nullptr, nullptr, SW_SHOWNORMAL);
 		}
 
+		// Only http(s) so a shared preset's url can't launch an arbitrary path
+		// or command through ShellExecute.
+		bool IsWebUrl(const std::string& a_url)
+		{
+			return a_url.starts_with("http://") || a_url.starts_with("https://");
+		}
+
+		void OpenUrl(const std::string& a_url)
+		{
+			if (IsWebUrl(a_url)) {
+				ShellExecuteA(nullptr, "open", a_url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+			}
+		}
+
+		// A clickable link: link-blue text that opens the URL in the browser.
+		void LinkText(const std::string& a_url)
+		{
+			ImGuiMCP::TextColored(ImGuiMCP::ImVec4{ 0.36f, 0.66f, 1.0f, 1.0f }, "%s", a_url.c_str());
+			if (ImGuiMCP::IsItemClicked(0)) {
+				OpenUrl(a_url);
+			}
+			if (ImGuiMCP::IsItemHovered(0)) {
+				ImGuiMCP::SetTooltip("Open in browser");
+			}
+		}
+
 		// The preset the live motion fields currently equal (nullptr = none).
 		// Returns the whole Effect so the panel can show its name plus the
 		// description/attribution, not just a label.
@@ -414,6 +440,9 @@ namespace FDNG::UI
 				if (match && !match->source.empty()) {
 					ImGuiMCP::TextDisabled("Source: %s", match->source.c_str());
 				}
+				if (match && IsWebUrl(match->url)) {
+					LinkText(match->url);
+				}
 				ImGuiMCP::SliderFloat("Rise speed (units/s)", &s->motion.riseSpeed, -50.0f, 200.0f, "%.0f", 0);
 				Tip("How fast a number rises. Negative makes it sink.");
 				ImGuiMCP::SliderFloat("Vertical accel", &s->motion.riseAccel, -400.0f, 200.0f, "%.0f", 0);
@@ -457,17 +486,19 @@ namespace FDNG::UI
 				static char presetName[48]{};
 				static char presetDesc[128]{};
 				static char presetSrc[128]{};
+				static char presetUrl[192]{};
 				static std::string saveMsg;
 				if (ImGuiMCP::InputTextWithHint("##fdng_preset_name", "Preset name to save...", presetName, sizeof(presetName), 0, nullptr, nullptr)) {
 					saveMsg.clear();  // stop showing a stale result once they edit the name
 				}
 				ImGuiMCP::InputTextWithHint("##fdng_preset_desc", "Description (optional)", presetDesc, sizeof(presetDesc), 0, nullptr, nullptr);
 				ImGuiMCP::InputTextWithHint("##fdng_preset_src", "Source / credit (optional)", presetSrc, sizeof(presetSrc), 0, nullptr, nullptr);
+				ImGuiMCP::InputTextWithHint("##fdng_preset_url", "Link (http/https, optional)", presetUrl, sizeof(presetUrl), 0, nullptr, nullptr);
 				if (ImGuiMCP::Button("Save preset", { 0, 0 }) && presetName[0]) {
 					// Keep the typed fields on failure so they aren't lost.
-					if (Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg, presetDesc, presetSrc })) {
+					if (Presets::Save({ presetName, false, s->motion, s->spreadPattern, s->spawnAngleDeg, presetDesc, presetSrc, presetUrl })) {
 						saveMsg = std::format("Saved '{}'.", presetName);
-						presetName[0] = presetDesc[0] = presetSrc[0] = '\0';
+						presetName[0] = presetDesc[0] = presetSrc[0] = presetUrl[0] = '\0';
 					} else {
 						saveMsg = "Save failed - use a unique name (letters, numbers, spaces, - or _; not a built-in).";
 					}

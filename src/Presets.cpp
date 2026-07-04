@@ -65,6 +65,7 @@ namespace FDNG::Presets
 			};
 			e.description = str("description");
 			e.source = str("source");
+			e.url = str("url");
 			return e;
 		}
 
@@ -159,6 +160,9 @@ namespace FDNG::Presets
 		}
 		if (!a_effect.source.empty()) {
 			json["source"] = a_effect.source;
+		}
+		if (!a_effect.url.empty()) {
+			json["url"] = a_effect.url;
 		}
 		std::ofstream out(std::filesystem::path(kPresetDir) / (file + ".json"));
 		if (!out) {

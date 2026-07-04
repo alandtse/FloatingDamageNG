@@ -25,3 +25,5 @@ Fields (see "Arc.json" / "Fireworks.json"):
   spawnAngle      degrees rotated per hit (rotate) or launch tilt (diagonal)
   description     optional: shown as a tooltip when you hover the preset
   source          optional: attribution/credit, also shown in the tooltip
+  url             optional: an http/https link, shown as a clickable link on
+                  the panel (other schemes are ignored for safety)

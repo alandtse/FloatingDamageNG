@@ -24,6 +24,7 @@ namespace FDNG::Presets
 		float spawnAngleDeg{ 0.0f };
 		std::string description;  // optional: what the effect does (picker tooltip)
 		std::string source;       // optional: attribution / where it came from
+		std::string url;          // optional: http(s) link, clickable in the menu
 	};
 
 	// Built-ins first, then user files (alphabetical). Cached; call Reload to
