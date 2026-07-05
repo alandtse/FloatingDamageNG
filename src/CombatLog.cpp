@@ -100,14 +100,23 @@ namespace FDNG
 
 	void CombatLog::Register()
 	{
+		bool any = false;
 		if (const auto holder = RE::ScriptEventSourceHolder::GetSingleton()) {
 			holder->AddEventSink<RE::TESCombatEvent>(this);
 			holder->AddEventSink<RE::TESDeathEvent>(this);
+			any = true;
+		} else {
+			logger::warn("ScriptEventSourceHolder unavailable; combat/death sinks not registered.");
 		}
 		if (const auto ui = RE::UI::GetSingleton()) {
 			ui->AddEventSink<RE::MenuOpenCloseEvent>(this);
+			any = true;
+		} else {
+			logger::warn("UI singleton unavailable; menu-open sink not registered.");
 		}
-		logger::info("Combat analytics sinks registered.");
+		if (any) {
+			logger::info("Combat analytics sinks registered.");
+		}
 	}
 
 	float CombatLog::SessionSeconds() const
@@ -269,7 +278,10 @@ namespace FDNG
 		// book-activation path both gate on Actor::IsInCombat before letting
 		// the menu open) - so a successful open is the engine's own proof the
 		// player is out of combat, more immediate than our poll/idle timer.
-		if (!a_event || !a_event->opening) {
+		// Guard on the master switch: while logging is off, a set flag would
+		// otherwise persist (Tick() never drains it) and could force-close an
+		// unrelated later session if the user re-enables logging afterward.
+		if (!a_event || !a_event->opening || !Settings::GetSingleton()->enableCombatLog) {
 			return RE::BSEventNotifyControl::kContinue;
 		}
 		if (a_event->menuName == "Sleep/Wait Menu" || a_event->menuName == "Crafting Menu" || a_event->menuName == "Book Menu") {
