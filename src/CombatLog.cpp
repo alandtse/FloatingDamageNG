@@ -103,8 +103,11 @@ namespace FDNG
 		if (const auto holder = RE::ScriptEventSourceHolder::GetSingleton()) {
 			holder->AddEventSink<RE::TESCombatEvent>(this);
 			holder->AddEventSink<RE::TESDeathEvent>(this);
-			logger::info("Combat analytics sinks registered.");
 		}
+		if (const auto ui = RE::UI::GetSingleton()) {
+			ui->AddEventSink<RE::MenuOpenCloseEvent>(this);
+		}
+		logger::info("Combat analytics sinks registered.");
 	}
 
 	float CombatLog::SessionSeconds() const
@@ -258,6 +261,23 @@ namespace FDNG
 		return RE::BSEventNotifyControl::kContinue;
 	}
 
+	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
+	{
+		// Engine thread - POD handoff only (see class comment). The engine
+		// itself refuses to open Sleep/Wait, Crafting, or Book menus while the
+		// player is in combat (RE-confirmed: TESFurniture::Activate and the
+		// book-activation path both gate on Actor::IsInCombat before letting
+		// the menu open) - so a successful open is the engine's own proof the
+		// player is out of combat, more immediate than our poll/idle timer.
+		if (!a_event || !a_event->opening) {
+			return RE::BSEventNotifyControl::kContinue;
+		}
+		if (a_event->menuName == "Sleep/Wait Menu" || a_event->menuName == "Crafting Menu" || a_event->menuName == "Book Menu") {
+			_forceCloseOnGatedMenu.store(true, std::memory_order_relaxed);
+		}
+		return RE::BSEventNotifyControl::kContinue;
+	}
+
 	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::TESDeathEvent* a_event, RE::BSTEventSource<RE::TESDeathEvent>*)
 	{
 		// Engine thread - POD handoff only (see class comment).
@@ -305,6 +325,9 @@ namespace FDNG
 		// Engine reads happen before taking _lock (see class comment).
 		const auto player = RE::PlayerCharacter::GetSingleton();
 		const bool playerInCombat = player && player->IsInCombat();
+		// Drain every tick regardless of session state so a stale flag can't
+		// linger and force-close a later, unrelated session.
+		const bool gatedMenuOpened = _forceCloseOnGatedMenu.exchange(false, std::memory_order_relaxed);
 
 		std::scoped_lock lk{ _lock };
 		if (!_sessionActive) {
@@ -326,8 +349,13 @@ namespace FDNG
 		}
 
 		// Close only once damage has stopped: NPC-only fights keep a session
-		// alive even though the player never enters combat.
-		if (!playerInCombat && now - _lastDamageAt > kIdleClose) {
+		// alive even though the player never enters combat. A combat-gated
+		// menu successfully opening is the engine's own proof combat already
+		// ended, so it closes immediately rather than waiting on the idle timer.
+		if (gatedMenuOpened) {
+			logger::info("Combat session force-closed: a combat-gated menu opened.");
+			CloseSession();
+		} else if (!playerInCombat && now - _lastDamageAt > kIdleClose) {
 			CloseSession();
 		}
 	}
