@@ -272,15 +272,10 @@ namespace FDNG
 
 	RE::BSEventNotifyControl CombatLog::ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*)
 	{
-		// Engine thread - POD handoff only (see class comment). The engine
-		// itself refuses to open Sleep/Wait, Crafting, or Book menus while the
-		// player is in combat (RE-confirmed: TESFurniture::Activate and the
-		// book-activation path both gate on Actor::IsInCombat before letting
-		// the menu open) - so a successful open is the engine's own proof the
-		// player is out of combat, more immediate than our poll/idle timer.
-		// Guard on the master switch: while logging is off, a set flag would
-		// otherwise persist (Tick() never drains it) and could force-close an
-		// unrelated later session if the user re-enables logging afterward.
+		// Engine thread - POD handoff only (see class comment). A successful
+		// open is the engine's own proof combat already ended - more reliable
+		// than our poll. Guarded on enableCombatLog: an unguarded flag would
+		// persist across a later re-enable and force-close an unrelated session.
 		if (!a_event || !a_event->opening || !Settings::GetSingleton()->enableCombatLog) {
 			return RE::BSEventNotifyControl::kContinue;
 		}
