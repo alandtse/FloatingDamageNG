@@ -168,6 +168,9 @@ namespace FDNG
 		_lastPlayerHitAt = -1.0f;
 		_dpsSamples.clear();
 		_lastSampleDamage = 0.0f;
+		// Discard any flag set before this session existed - the 1 Hz poll gate
+		// can otherwise delay the drain past a new, unrelated session's start.
+		_forceCloseOnGatedMenu.store(false, std::memory_order_relaxed);
 		logger::info("Combat session #{} started @ {}", _sessionIndex, _location);
 	}
 
@@ -356,10 +359,11 @@ namespace FDNG
 		}
 
 		// Close only once damage has stopped: NPC-only fights keep a session
-		// alive even though the player never enters combat. A combat-gated
-		// menu successfully opening is the engine's own proof combat already
-		// ended, so it closes immediately rather than waiting on the idle timer.
-		if (gatedMenuOpened) {
+		// alive even though the player never enters combat. A combat-gated menu
+		// opening only proves the PLAYER's own combat state cleared, not that an
+		// NPC-only fight elsewhere ended, so it force-closes just the sessions
+		// the player is actually part of.
+		if (gatedMenuOpened && player && _combatants.contains(player->GetFormID())) {
 			logger::info("Combat session force-closed: a combat-gated menu opened.");
 			CloseSession();
 		} else if (!playerInCombat && now - _lastDamageAt > kIdleClose) {
