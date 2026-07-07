@@ -24,7 +24,8 @@ namespace FDNG
 	// getters from UI/devbench threads.
 	class CombatLog :
 		public RE::BSTEventSink<RE::TESCombatEvent>,
-		public RE::BSTEventSink<RE::TESDeathEvent>
+		public RE::BSTEventSink<RE::TESDeathEvent>,
+		public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 	{
 	public:
 		struct LiveStats
@@ -112,6 +113,7 @@ namespace FDNG
 
 		RE::BSEventNotifyControl ProcessEvent(const RE::TESCombatEvent* a_event, RE::BSTEventSource<RE::TESCombatEvent>*) override;
 		RE::BSEventNotifyControl ProcessEvent(const RE::TESDeathEvent* a_event, RE::BSTEventSource<RE::TESDeathEvent>*) override;
+		RE::BSEventNotifyControl ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>*) override;
 
 	private:
 		using Clock = std::chrono::steady_clock;
@@ -203,6 +205,11 @@ namespace FDNG
 			Clock::time_point at{};
 		};
 		std::atomic<RE::FormID> _combatHint{ 0 };
+		// Set when a combat-gated menu (Sleep/Wait, Crafting, Book) opens - the
+		// engine only allows that if it already considers the player out of
+		// combat, so it force-closes our session instead of waiting on the
+		// idle timer. Doesn't touch engine combat state, only our own tracking.
+		std::atomic<bool> _forceCloseOnGatedMenu{ false };
 		std::mutex _deathLock;
 		std::array<PendingDeath, 32> _deaths{};
 		std::size_t _deathCount{ 0 };
