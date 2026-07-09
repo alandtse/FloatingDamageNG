@@ -55,14 +55,17 @@ namespace FDNG::Hooks
 		// is VTABLE[5]: TESObjectREFR contributes secondary vtables first
 		// (BSHandleRefObject, BSTEventSink<BSAnimationGraphEvent>,
 		// IAnimationGraphManagerHolder), then MagicTarget, then ActorValueOwner
-		// at offset 0xB0 (SE/AE) / 0xB8 (VR).
+		// at offset 0xB0 (SE/VR) / 0xB8 (AE).
 		template <class TActor>
 		struct ModActorValue
 		{
 			static void thunk(RE::ActorValueOwner* a_this, RE::ACTOR_VALUE_MODIFIER a_modifier, RE::ActorValue a_value, float a_amount)
 			{
 				if (a_modifier == RE::ACTOR_VALUE_MODIFIER::kDamage && t_inEffectModify == 0) {
-					const auto actor = stl::adjust_pointer<RE::Actor>(a_this, -static_cast<std::ptrdiff_t>(REL::Module::IsVR() ? 0xB8 : 0xB0));
+					// Ghidra-verified (disassembly of the engine's own ModActorValue body):
+					// SE and VR share this this-adjustment; AE alone diverges - not the
+					// usual "VR is the odd one out" pattern.
+					const auto actor = stl::adjust_pointer<RE::Actor>(a_this, -static_cast<std::ptrdiff_t>(REL::Module::IsAE() ? 0xB8 : 0xB0));
 					const auto settings = Settings::GetSingleton();
 					if (a_value == RE::ActorValue::kHealth) {
 						if (a_amount > 0.0f) {
