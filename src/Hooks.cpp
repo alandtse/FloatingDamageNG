@@ -29,15 +29,15 @@ namespace FDNG::Hooks
 		{
 			static void thunk(RE::Actor* a_this, RE::Actor* a_attacker, float a_damage)
 			{
-				++t_inHandleHealthDamage;
-				func(a_this, a_attacker, a_damage);
-				--t_inHandleHealthDamage;
 				// Effect ticks re-enter here nested inside ModifyActorValue;
 				// the effect hook already captured them with better
 				// attribution, so only genuine weapon blows queue.
 				if (t_inEffectModify == 0) {
 					Capture::GetSingleton()->OnHealthDamage(a_this, a_attacker, a_damage);
 				}
+				++t_inHandleHealthDamage;
+				func(a_this, a_attacker, a_damage);
+				--t_inHandleHealthDamage;
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 
