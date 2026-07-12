@@ -429,14 +429,12 @@ namespace FDNG
 
 		const auto playerID = RE::PlayerCharacter::GetSingleton() ? RE::PlayerCharacter::GetSingleton()->GetFormID() : 0;
 		for (const auto& [id, c] : _combatants) {
-			if (id == playerID) {
-				continue;
-			}
 			if (c.isFollower && !settings->logFollowerPerformance) {
 				continue;
 			}
 			CombatantSummary cs;
 			cs.name = c.name;
+			cs.isPlayer = id == playerID;
 			cs.isFollower = c.isFollower;
 			cs.isHostileToPlayer = c.isHostileToPlayer;
 			cs.died = c.diedAt >= 0.0f;
@@ -514,6 +512,9 @@ namespace FDNG
 		out << std::format("  Player: {:.0f} dmg | DPS {:.1f} real / {:.1f} active ({:.1f}s active, peak {:.0f})\n",
 			a_summary.playerDamage, a_summary.realDPS, a_summary.activeDPS, _playerActiveSeconds, a_summary.peakDPS);
 		for (const auto& c : a_summary.combatants) {
+			if (c.isPlayer) {
+				continue;  // already summarized in the "Player:" line above
+			}
 			std::string fate;
 			if (c.died) {
 				fate = c.timeToDie >= 0.0f ? std::format(" - died (TTD {:.1f}s, by {})", c.timeToDie, c.killedBy) :
