@@ -54,6 +54,7 @@ namespace FDNG
 		struct CombatantSummary
 		{
 			std::string name;
+			bool isPlayer{ false };
 			bool isFollower{ false };
 			bool isHostileToPlayer{ false };
 			bool died{ false };

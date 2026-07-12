@@ -58,6 +58,7 @@ namespace FDNG::Export
 		for (const auto& c : a_s.combatants) {
 			combatants.push_back({
 				{ "name", c.name },
+				{ "isPlayer", c.isPlayer },
 				{ "follower", c.isFollower },
 				{ "hostile", c.isHostileToPlayer },
 				{ "died", c.died },
@@ -129,15 +130,15 @@ namespace FDNG::Export
 			}
 			if (writeHeader) {
 				out << "session,started_at,location,duration_s,combatant,follower,hostile,"
-					   "damage_dealt,damage_taken,healing_received,hits,crits,died,fled,time_to_die_s,killed_by\n";
+					   "damage_dealt,damage_taken,healing_received,hits,crits,died,fled,time_to_die_s,killed_by,is_player\n";
 			}
 			// One row per combatant — the grain spreadsheets actually pivot on.
 			for (const auto& c : a_summary.combatants) {
-				out << std::format("{},{},{},{:.1f},{},{},{},{:.0f},{:.0f},{:.0f},{},{},{},{},{:.1f},{}\n",
+				out << std::format("{},{},{},{:.1f},{},{},{},{:.0f},{:.0f},{:.0f},{},{},{},{},{:.1f},{},{}\n",
 					a_summary.index, CsvCell(a_summary.startedAt), CsvCell(a_summary.location), a_summary.duration,
 					CsvCell(c.name), c.isFollower, c.isHostileToPlayer,
 					c.damageDealt, c.damageTaken, c.healingReceived, c.hitsDealt, c.critsDealt,
-					c.died, c.fled, c.timeToDie, CsvCell(c.killedBy));
+					c.died, c.fled, c.timeToDie, CsvCell(c.killedBy), c.isPlayer);
 			}
 		}
 	}

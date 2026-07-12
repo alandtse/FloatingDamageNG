@@ -735,7 +735,9 @@ namespace FDNG::UI
 				const auto& c = *row;
 				ImGuiMCP::TableNextRow(0, 0.0f);
 				ImGuiMCP::TableSetColumnIndex(0);
-				ImGuiMCP::Text("%s%s", c.name.c_str(), c.isFollower ? " (follower)" : (c.isHostileToPlayer ? "" : " (neutral)"));
+				ImGuiMCP::Text("%s%s", c.name.c_str(),
+					c.isPlayer ? " (you)" : c.isFollower ? " (follower)" :
+														   (c.isHostileToPlayer ? "" : " (neutral)"));
 				ImGuiMCP::TableSetColumnIndex(1);
 				ImGuiMCP::Text("%.0f", c.damageDealt);
 				ImGuiMCP::TableSetColumnIndex(2);
@@ -818,10 +820,17 @@ namespace FDNG::UI
 			int& sel = s_selected[a_session.index];
 			sel = std::clamp(sel, 0, static_cast<int>(a_session.combatants.size()) - 1);
 
+			// Player's own name gets a "(you)" tag; owned here since it's not
+			// stored on the summary (that's just the character name).
+			std::vector<std::string> displayNames;
+			displayNames.reserve(a_session.combatants.size());
 			std::vector<const char*> names;
 			names.reserve(a_session.combatants.size());
 			for (const auto& c : a_session.combatants) {
-				names.push_back(c.name.c_str());
+				displayNames.push_back(c.isPlayer ? c.name + " (you)" : c.name);
+			}
+			for (const auto& n : displayNames) {
+				names.push_back(n.c_str());
 			}
 			const auto comboID = std::format("Drill-down###fdng_drill{}", a_session.index);
 			SearchableCombo(comboID.c_str(), &sel, names);
