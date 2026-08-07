@@ -521,7 +521,7 @@ namespace FDNG
 	void Capture::ProcessRestore(RE::Actor* a_target, float a_amount, RE::Actor* a_healer)
 	{
 		const auto settings = Settings::GetSingleton();
-		if (!settings->enableFloatingDamage || !settings->showHealing) {
+		if (!settings->showHealing) {
 			return;
 		}
 
@@ -550,6 +550,10 @@ namespace FDNG
 		}
 
 		CombatLog::GetSingleton()->RecordHeal(a_target, emit);
+
+		if (!settings->enableFloatingDamage) {
+			return;
+		}
 
 		DamageEvent event;
 		event.victimID = a_target->GetFormID();
