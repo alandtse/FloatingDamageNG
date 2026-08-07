@@ -326,6 +326,9 @@ namespace FDNG::UI
 			ImGuiMCP::Separator();
 
 			if (ImGuiMCP::CollapsingHeader("What to show", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
+				ImGuiMCP::Checkbox("Enable floating damage numbers", &s->enableFloatingDamage);
+				Tip("Master switch - off hides every number below regardless of the individual settings. Combat log/DPS tracking are unaffected.");
+				ImGuiMCP::Separator();
 				ImGuiMCP::Checkbox("Your damage", &s->showPlayerDamageDealt);
 				ImGuiMCP::Checkbox("Follower damage", &s->showFollowerDamageDealt);
 				ImGuiMCP::Checkbox("NPC-vs-NPC damage", &s->showNPCOnNPCDamage);

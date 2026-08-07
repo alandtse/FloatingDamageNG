@@ -521,7 +521,7 @@ namespace FDNG
 	void Capture::ProcessRestore(RE::Actor* a_target, float a_amount, RE::Actor* a_healer)
 	{
 		const auto settings = Settings::GetSingleton();
-		if (!settings->showHealing) {
+		if (!settings->enableFloatingDamage || !settings->showHealing) {
 			return;
 		}
 
@@ -608,6 +608,9 @@ namespace FDNG
 		event.origin = origin;
 		event.flags = a_flags;
 
+		if (!settings->enableFloatingDamage) {
+			return;
+		}
 		switch (origin) {
 		case OriginTier::kPlayer:
 			if (!settings->showPlayerDamageDealt) {
