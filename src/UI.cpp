@@ -329,6 +329,7 @@ namespace FDNG::UI
 			Tip("Master switch - off hides every number below regardless of the individual settings. Combat log/DPS tracking are unaffected.");
 			ImGuiMCP::Separator();
 
+			ImGuiMCP::BeginDisabled(!s->enableFloatingDamage);
 			if (ImGuiMCP::CollapsingHeader("What to show", ImGuiMCP::ImGuiTreeNodeFlags_DefaultOpen)) {
 				ImGuiMCP::Checkbox("Your damage", &s->showPlayerDamageDealt);
 				ImGuiMCP::Checkbox("Follower damage", &s->showFollowerDamageDealt);
@@ -611,6 +612,7 @@ namespace FDNG::UI
 					ColorRow(def.uiLabel, s->*def.field);
 				}
 			}
+			ImGuiMCP::EndDisabled();
 
 			SaveRow(s);
 		}
