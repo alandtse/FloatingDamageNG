@@ -80,12 +80,14 @@ add_includedirs("src")
 set_pcxxheader("src/pch.h")
 
 -- Auto-deploy on build. Looks at, in order:
---   1. SkyrimVRPluginTargets — semicolon-separated list of Data folders
---      (or mod-manager mod folders) for explicit override.
+--   1. SkyrimVRPluginTargets or SkyrimPluginTargets — semicolon-separated
+--      list of Data folders (or mod-manager mod folders) for explicit
+--      override. Both names are accepted since different setups on this
+--      toolchain use either one.
 --   2. SkyrimVRPath — community env var. Conventionally the SkyrimVR install
 --      root (folder containing SkyrimVR.exe), but some setups point it at the
 --      Data folder directly; we accept both.
--- If neither is set, the deploy step is a no-op.
+-- If none are set, the deploy step is a no-op.
 after_build(function(target)
     local function to_data_folder(p)
         p = p:trim()
@@ -96,7 +98,7 @@ after_build(function(target)
     end
 
     local function collect_targets()
-        local explicit = os.getenv("SkyrimVRPluginTargets")
+        local explicit = os.getenv("SkyrimVRPluginTargets") or os.getenv("SkyrimPluginTargets")
         if explicit and explicit ~= "" then
             local out = {}
             for _, dir in ipairs(explicit:split(";")) do
@@ -116,7 +118,7 @@ after_build(function(target)
 
     local targets = collect_targets()
     if #targets == 0 then
-        print("No deploy target (set SkyrimVRPath or SkyrimVRPluginTargets)")
+        print("No deploy target (set SkyrimVRPath, SkyrimVRPluginTargets, or SkyrimPluginTargets)")
         return
     end
 
