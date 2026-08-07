@@ -97,9 +97,16 @@ after_build(function(target)
         return p
     end
 
+    local function nonblank(v)
+        if v and v:trim() ~= "" then
+            return v
+        end
+        return nil
+    end
+
     local function collect_targets()
-        local explicit = os.getenv("SkyrimVRPluginTargets") or os.getenv("SkyrimPluginTargets")
-        if explicit and explicit ~= "" then
+        local explicit = nonblank(os.getenv("SkyrimVRPluginTargets")) or nonblank(os.getenv("SkyrimPluginTargets"))
+        if explicit then
             local out = {}
             for _, dir in ipairs(explicit:split(";")) do
                 dir = dir:trim()

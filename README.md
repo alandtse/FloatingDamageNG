@@ -139,8 +139,8 @@ xmake
 
 Sister-repo client APIs (imgui-vr-helper, SKSE Menu Framework, devbench) are
 pulled at build time from pinned upstream commits via the local package repo
-in `xmake-pkgs/`. Set `SkyrimVRPath` or `SkyrimVRPluginTargets` to auto-deploy
-after each build.
+in `xmake-pkgs/`. Set `SkyrimVRPath`, `SkyrimVRPluginTargets`, or
+`SkyrimPluginTargets` to auto-deploy after each build.
 
 ## Credits
 
