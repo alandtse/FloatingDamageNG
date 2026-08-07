@@ -551,6 +551,10 @@ namespace FDNG
 
 		CombatLog::GetSingleton()->RecordHeal(a_target, emit);
 
+		if (!settings->enableFloatingDamage) {
+			return;
+		}
+
 		DamageEvent event;
 		event.victimID = a_target->GetFormID();
 		event.anchor = GetAnchorPos(a_target);
@@ -608,6 +612,9 @@ namespace FDNG
 		event.origin = origin;
 		event.flags = a_flags;
 
+		if (!settings->enableFloatingDamage) {
+			return;
+		}
 		switch (origin) {
 		case OriginTier::kPlayer:
 			if (!settings->showPlayerDamageDealt) {

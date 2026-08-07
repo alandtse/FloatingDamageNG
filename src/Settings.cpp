@@ -52,6 +52,7 @@ namespace FDNG
 			return;
 		}
 
+		enableFloatingDamage = ini.GetBoolValue("CoreFilters", "bEnableFloatingDamage", enableFloatingDamage);
 		showPlayerDamageDealt = ini.GetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
 		showFollowerDamageDealt = ini.GetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
 		showNPCOnNPCDamage = ini.GetBoolValue("CoreFilters", "bShowNPCOnNPCDamage", showNPCOnNPCDamage);
@@ -191,6 +192,7 @@ namespace FDNG
 			ini.SetValue("Colors", def.iniKey, std::format("0x{:06X}", this->*def.field).c_str());
 		}
 
+		ini.SetBoolValue("CoreFilters", "bEnableFloatingDamage", enableFloatingDamage);
 		ini.SetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
 		ini.SetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
 		ini.SetBoolValue("CoreFilters", "bShowNPCOnNPCDamage", showNPCOnNPCDamage);

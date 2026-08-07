@@ -85,6 +85,7 @@ namespace FDNG
 		void ResetToDefaults();  // in-memory only; Save() to persist
 
 		// [CoreFilters]
+		bool enableFloatingDamage{ true };  // master switch; the show* flags below only matter while this is on
 		bool showPlayerDamageDealt{ true };
 		bool showFollowerDamageDealt{ true };
 		bool showNPCOnNPCDamage{ true };     // heavily attenuated + distance-culled anyway
