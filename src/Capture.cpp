@@ -11,6 +11,10 @@ namespace FDNG
 {
 	namespace
 	{
+		// Windows never maps the first 64 KiB of a process's address space, so
+		// any real Actor* is guaranteed to be >= this.
+		constexpr std::uintptr_t kMinValidUserAddress = 0x10000;
+
 		RE::NiPoint3 GetAnchorPos(RE::Actor* a_actor)
 		{
 			if (const auto middle = a_actor->GetMiddleHighProcess(); middle && middle->headNode) {
@@ -253,6 +257,17 @@ namespace FDNG
 	{
 		if (!a_victim || a_damage >= 0.0f) {
 			return;
+		}
+		// a_attacker comes from whoever called into this hooked vtable slot,
+		// not just the engine - treat an implausible pointer as null instead
+		// of dereferencing it.
+		if (a_attacker && reinterpret_cast<std::uintptr_t>(a_attacker) < kMinValidUserAddress) {
+			static thread_local bool warned = false;
+			if (!warned) {
+				warned = true;
+				logger::warn("OnHealthDamage: implausible attacker pointer {:p} ignored (caller bug?)", static_cast<void*>(a_attacker));
+			}
+			a_attacker = nullptr;
 		}
 		RawEvent raw;
 		raw.source = RawEvent::Source::kWeaponHit;
