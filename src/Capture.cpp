@@ -566,6 +566,12 @@ namespace FDNG
 
 		CombatLog::GetSingleton()->RecordHeal(a_target, emit);
 
+		// Must stay after RecordHeal: analytics records every application
+		// regardless of display filters.
+		if (a_target->IsDead()) {
+			return;
+		}
+
 		if (!settings->enableFloatingDamage) {
 			return;
 		}
@@ -612,6 +618,12 @@ namespace FDNG
 
 		// Analytics sees every application, independent of the display filters.
 		CombatLog::GetSingleton()->RecordDamage(a_attacker, a_victim, a_amount, a_kind, a_flags, a_mitigated, a_sourceID);
+
+		// Must stay after RecordDamage: analytics records every application
+		// regardless of display filters.
+		if (a_victim->IsDead()) {
+			return;
+		}
 
 		DamageEvent event;
 		event.victimID = a_victim->GetFormID();
