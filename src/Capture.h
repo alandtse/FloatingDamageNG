@@ -65,7 +65,7 @@ namespace FDNG
 	// on the main thread each frame and does everything else there:
 	// resolution, classification, filters, analytics, spawning.
 	class Capture :
-		public RE::BSTEventSink<RE::TESMagicEffectApplyEvent>
+	    public RE::BSTEventSink<RE::TESMagicEffectApplyEvent>
 	{
 	public:
 		static Capture* GetSingleton();
