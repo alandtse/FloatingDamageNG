@@ -23,9 +23,9 @@ namespace FDNG
 	// render hook); the only other _lock contenders are read-only snapshot
 	// getters from UI/devbench threads.
 	class CombatLog :
-		public RE::BSTEventSink<RE::TESCombatEvent>,
-		public RE::BSTEventSink<RE::TESDeathEvent>,
-		public RE::BSTEventSink<RE::MenuOpenCloseEvent>
+	    public RE::BSTEventSink<RE::TESCombatEvent>,
+	    public RE::BSTEventSink<RE::TESDeathEvent>,
+	    public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 	{
 	public:
 		struct LiveStats
