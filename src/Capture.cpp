@@ -422,6 +422,7 @@ namespace FDNG
 				entry.amount = raw.amount;
 				entry.deadAtQueue = raw.victimDead;
 				entry.deadAtProcess = IsDyingOrDead(victim);
+				entry.overTime = raw.overTime;
 				RecordTrace(entry);
 			}
 			if (settings->debugLog) {

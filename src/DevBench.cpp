@@ -79,6 +79,7 @@ namespace FDNG::DevBench
 						j["amount"] = e.amount;
 						j["deadAtQueue"] = e.deadAtQueue;
 						j["deadAtProcess"] = e.deadAtProcess;
+						j["overTime"] = e.overTime;
 					}
 					trace.push_back(std::move(j));
 				}

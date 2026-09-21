@@ -132,6 +132,7 @@ namespace FDNG
 			float amount{ 0.0f };
 			bool deadAtQueue{ false };
 			bool deadAtProcess{ false };
+			bool overTime{ false };
 			float totalDamage{ 0.0f };
 			float physicalDamage{ 0.0f };
 			float knockback{ 0.0f };

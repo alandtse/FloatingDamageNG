@@ -283,6 +283,9 @@ namespace FDNG
 		}
 
 		BuildText(n);
+		if (settings->debugLog) {
+			logger::debug("Number: victim={:08X} text='{}' subtext='{}' extra={}", n.victimID, n.text, n.subtext, n.extraIndex);
+		}
 	}
 
 	RE::NiPoint3 NumberManager::KinematicOffset(const Number& a_number) const
