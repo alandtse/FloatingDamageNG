@@ -110,6 +110,8 @@ namespace FDNG
 		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
+		dotDisplay = static_cast<DotDisplay>(std::clamp<long>(ini.GetLongValue("Behavior", "iDotDisplay", std::to_underlying(dotDisplay)), 0, 1));
+		dotTickSeconds = std::clamp(static_cast<float>(ini.GetDoubleValue("Behavior", "fDotTickSeconds", dotTickSeconds)), 0.25f, 5.0f);
 
 		originStyle = static_cast<OriginStyle>(std::clamp<long>(ini.GetLongValue("Style", "iOriginStyle", std::to_underlying(originStyle)), 0, 3));
 		styleThickness = std::clamp(static_cast<float>(ini.GetDoubleValue("Style", "fStyleThickness", styleThickness)), 0.5f, 6.0f);
@@ -252,6 +254,8 @@ namespace FDNG
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
 		ini.SetDoubleValue("Behavior", "fMinHealToShow", minHealToShow);
 		ini.SetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow);
+		ini.SetLongValue("Behavior", "iDotDisplay", std::to_underlying(dotDisplay));
+		ini.SetDoubleValue("Behavior", "fDotTickSeconds", dotTickSeconds);
 
 		ini.SetBoolValue("Analytics", "bEnableCombatLog", enableCombatLog);
 		ini.SetBoolValue("Analytics", "bWriteLogToDisk", writeLogToDisk);
