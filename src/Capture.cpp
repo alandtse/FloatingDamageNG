@@ -385,6 +385,7 @@ namespace FDNG
 		if (const auto mgef = a_effect->GetBaseObject()) {
 			raw.mgefID = mgef->GetFormID();
 		}
+		raw.overTime = a_effect->duration > 0.0f;
 		QueueRaw(raw);
 	}
 
@@ -579,7 +580,7 @@ namespace FDNG
 				}
 			}
 			AuditRecord(a_raw.victimID, a_raw.amount);
-			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind, mitigated, a_raw.mgefID);
+			EmitPooledDamage(a_victim, caster, -a_raw.amount, kind, mitigated, a_raw.mgefID, a_raw.overTime);
 			return;
 		}
 
@@ -671,23 +672,31 @@ namespace FDNG
 		NumberManager::GetSingleton()->Enqueue(event);
 	}
 
-	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated, RE::FormID a_sourceID)
+	void Capture::EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated, RE::FormID a_sourceID, bool a_overTime)
 	{
 		const auto settings = Settings::GetSingleton();
 
 		// Concentration spells tick in sub-point deltas; pool them per
 		// victim+type until they clear the display threshold.
+		const bool perTick = a_overTime && settings->dotDisplay == DotDisplay::kPerTick;
 		float emit = a_amount;
 		float emitMitigated = a_mitigated;
-		if (a_amount < settings->minDamageToShow) {
+		if (perTick || a_amount < settings->minDamageToShow) {
 			std::scoped_lock lk{ _lock };
-			if (!_tickAccums[PoolKey(a_victim->GetFormID(), a_kind)].Accumulate(
-					Clock::now(), a_amount, a_mitigated, settings->minDamageToShow, kMagicWindow, emit, emitMitigated)) {
+			auto& pool = _tickAccums[PoolKey(a_victim->GetFormID(), a_kind)];
+			const auto now = Clock::now();
+			const bool ready = perTick ?
+			                       pool.AccumulateTicked(now, a_amount, a_mitigated, settings->minDamageToShow, kMagicWindow,
+									   std::chrono::duration<float>(settings->dotTickSeconds), emit, emitMitigated) :
+			                       pool.Accumulate(now, a_amount, a_mitigated, settings->minDamageToShow, kMagicWindow, emit, emitMitigated);
+			if (!ready) {
 				return;
 			}
 		}
 
-		EmitDamage(a_victim, a_attacker, emit, a_kind, HitFlags{}, emitMitigated, 0.0f, nullptr, MitigationLabel::kResisted, a_sourceID);
+		HitFlags flags;
+		flags.dotTick = perTick;
+		EmitDamage(a_victim, a_attacker, emit, a_kind, flags, emitMitigated, 0.0f, nullptr, MitigationLabel::kResisted, a_sourceID);
 	}
 
 	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,

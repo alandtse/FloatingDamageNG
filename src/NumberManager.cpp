@@ -156,12 +156,13 @@ namespace FDNG
 				const float mergeWindow = a_event.kind == DamageKind::kHealing ?
 				                              std::max(settings->dotAccumulationWindow, 0.8f) :
 				                              settings->dotAccumulationWindow;
-				// Crits, sneak attacks, extras and locational hits stand alone; only plain numbers of
+				// Crits, sneak attacks, DoT ticks, extras and locational hits stand alone; only plain numbers of
 				// the same origin merge — without the origin check, an NPC
 				// hitting the player's target folded into the player's number.
 				if (n.kind == a_event.kind && n.origin == a_event.origin &&
 					!n.flags.critical && !a_event.flags.critical &&
 					!n.flags.sneak && !a_event.flags.sneak &&
+					!n.flags.dotTick && !a_event.flags.dotTick &&
 					n.extraIndex == kNoExtra && a_event.extraIndex == kNoExtra &&
 					!n.flags.perfectBlock && !a_event.flags.perfectBlock &&
 					n.location[0] == '\0' && a_event.location[0] == '\0' &&
