@@ -33,6 +33,7 @@ namespace FDNG
 		bool sneak{ false };
 		bool powerAttack{ false };
 		bool bash{ false };
+		bool dotTick{ false };
 		bool timedBash{ false };     // kTimedBash - a well-timed bash, distinct from a plain kBash
 		bool perfectBlock{ false };  // kBlockWithWeapon with ~0 damage through - a full negation
 	};
@@ -116,6 +117,7 @@ namespace FDNG
 			RE::FormID attackerID{ 0 };
 			RE::FormID mgefID{ 0 };
 			float amount{ 0.0f };  // signed engine delta (negative = damage)
+			bool overTime{ false };
 		};
 
 		struct PendingHit
@@ -150,6 +152,30 @@ namespace FDNG
 			Clock::time_point windowStart;
 			float amount{ 0.0f };
 			float mitigated{ 0.0f };
+
+			// Like Accumulate, but only releases once per interval, so a
+			// continuous effect reads as steady ticks instead of a running sum.
+			bool AccumulateTicked(Clock::time_point a_now, float a_amount, float a_mitigated,
+				float a_threshold, std::chrono::milliseconds a_staleWindow, std::chrono::duration<float> a_interval,
+				float& a_outAmount, float& a_outMitigated)
+			{
+				if (amount == 0.0f || a_now - windowStart > a_staleWindow + a_interval) {
+					windowStart = a_now;
+					amount = 0.0f;
+					mitigated = 0.0f;
+				}
+				amount += a_amount;
+				mitigated += a_mitigated;
+				if (amount < a_threshold || a_now - windowStart < a_interval) {
+					return false;
+				}
+				a_outAmount = amount;
+				a_outMitigated = mitigated;
+				amount = 0.0f;
+				mitigated = 0.0f;
+				windowStart = a_now;
+				return true;
+			}
 
 			// Returns true once the pooled total clears the threshold, with
 			// the totals in the out-params; the pool resets but the window
@@ -208,7 +234,7 @@ namespace FDNG
 
 		// EmitDamage with sub-threshold tick pooling (concentration spells
 		// apply in sub-point per-frame deltas).
-		void EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated = 0.0f, RE::FormID a_sourceID = 0);
+		void EmitPooledDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, float a_mitigated = 0.0f, RE::FormID a_sourceID = 0, bool a_overTime = false);
 
 		// Correlation windows: a weapon hit's HandleHealthDamage lands the same
 		// frame; magic apply can precede its first damage tick by a bit longer.
