@@ -92,6 +92,12 @@ namespace FDNG
 			return best;
 		}
 
+		bool IsDyingOrDead(const RE::Actor* a_actor)
+		{
+			const auto state = a_actor->GetLifeState();
+			return state == RE::ACTOR_LIFE_STATE::kDying || state == RE::ACTOR_LIFE_STATE::kDead;
+		}
+
 		OriginTier ClassifyOrigin(RE::Actor* a_victim, RE::Actor* a_attacker)
 		{
 			const auto player = RE::PlayerCharacter::GetSingleton();
@@ -231,6 +237,27 @@ namespace FDNG
 			_pendingHits[target->GetFormID()] = pending;
 		}
 
+		if (settings->enableDevBench) {
+			TraceEntry entry;
+			entry.type = TraceEntry::Type::kHit;
+			entry.victimID = target->GetFormID();
+			if (const auto aggressor = a_hitData.aggressor.get()) {
+				entry.attackerID = aggressor->GetFormID();
+			}
+			entry.totalDamage = a_hitData.totalDamage;
+			entry.physicalDamage = a_hitData.physicalDamage;
+			entry.knockback = a_hitData.pushBack;
+			entry.percentBlocked = a_hitData.percentBlocked;
+			entry.resistedPhysical = a_hitData.resistedPhysicalDamage;
+			entry.resistedTyped = a_hitData.resistedTypedDamage;
+			entry.stagger = a_hitData.stagger;
+			entry.weaponID = pending.weaponID;
+			entry.reflected = a_hitData.reflectedDamage;
+			entry.sneakMult = pending.flags.sneak ? a_hitData.bonusHealthDamageMult : 1.0f;
+			entry.hitFlags = std::to_underlying(a_hitData.flags.get());
+			RecordTrace(entry);
+		}
+
 		if (pending.flags.perfectBlock) {
 			// HandleHealthDamage never fires for this hit; synthesize the event here instead.
 			RawEvent raw;
@@ -290,6 +317,7 @@ namespace FDNG
 		raw.victimID = a_victim->GetFormID();
 		raw.attackerID = a_attacker ? a_attacker->GetFormID() : 0;
 		raw.amount = a_damage;
+		raw.victimDead = IsDyingOrDead(a_victim);
 		QueueRaw(raw);
 	}
 
@@ -378,6 +406,18 @@ namespace FDNG
 			const auto victim = RE::TESForm::LookupByID<RE::Actor>(raw.victimID);
 			if (!victim) {
 				continue;
+			}
+			if (settings->enableDevBench) {
+				TraceEntry entry;
+				entry.source = std::to_underlying(raw.source);
+				entry.av = static_cast<std::uint8_t>(raw.av);
+				entry.victimID = raw.victimID;
+				entry.attackerID = raw.attackerID;
+				entry.mgefID = raw.mgefID;
+				entry.amount = raw.amount;
+				entry.deadAtQueue = raw.victimDead;
+				entry.deadAtProcess = IsDyingOrDead(victim);
+				RecordTrace(entry);
 			}
 			if (settings->debugLog) {
 				logger::debug("Raw: src={} av={} victim={:08X} attacker={:08X} amount={:+.2f}",
@@ -696,6 +736,26 @@ namespace FDNG
 		}
 
 		NumberManager::GetSingleton()->Enqueue(event);
+	}
+
+	void Capture::RecordTrace(TraceEntry a_entry)
+	{
+		std::scoped_lock lk{ _lock };
+		const auto now = Clock::now();
+		if (_trace.empty()) {
+			_traceStart = now;
+		}
+		a_entry.seconds = std::chrono::duration<double>(now - _traceStart).count();
+		_trace.push_back(a_entry);
+		if (_trace.size() > kTraceCapacity) {
+			_trace.pop_front();
+		}
+	}
+
+	std::vector<Capture::TraceEntry> Capture::GetTrace()
+	{
+		std::scoped_lock lk{ _lock };
+		return { _trace.begin(), _trace.end() };
 	}
 
 	void Capture::AuditRecord(RE::FormID a_victimID, float a_delta)
