@@ -45,9 +45,10 @@ namespace FDNG::Renderer
 		{
 			const auto settings = Settings::GetSingleton();
 			// Crit/blocked styling overrides the kind hue.
-			const std::uint32_t rgb = a_n.flags.critical ? settings->colorCritical :
-			                          a_n.flags.blocked  ? settings->colorBlocked :
-			                                               KindRgb(*settings, a_n.kind);
+			const std::uint32_t rgb = a_n.extraIndex != kNoExtra ? settings->*kExtraTable[static_cast<std::size_t>(a_n.extraIndex)].color :
+			                          a_n.flags.critical         ? settings->colorCritical :
+			                          a_n.flags.blocked          ? settings->colorBlocked :
+			                                                       KindRgb(*settings, a_n.kind);
 			const auto a = static_cast<std::uint8_t>(std::clamp(a_alpha, 0.0f, 1.0f) * 255.0f);
 			return IM_COL32((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF, a);
 		}

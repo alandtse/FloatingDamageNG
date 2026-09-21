@@ -28,8 +28,10 @@ namespace FDNG
 		DamageKind kind{ DamageKind::kPhysical };
 		OriginTier origin{ OriginTier::kNPC };
 		HitFlags flags;
+		HitExtras extras;
+		int extraIndex{ kNoExtra };
 		char text[28]{};     // "104" / "CRIT 104" / "HEADSHOT 104"
-		char subtext[28]{};  // "(-45 resisted)" / "(-45 resisted) x2.5"
+		char subtext[64]{};  // "(-45 resisted) x2.5 +12 crit +30 sneak 8 reflected"
 	};
 
 	// Per-frame, per-number draw parameters resolved by Resolve(); the
