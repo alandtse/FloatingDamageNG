@@ -74,6 +74,12 @@ namespace FDNG
 		const auto rounded = std::max(1, static_cast<int>(std::lround(a_number.amount)));
 		char num[16]{};
 		FormatMagnitude(num, sizeof(num), rounded, Settings::GetSingleton()->abbreviateNumbers);
+		if (a_number.extraIndex != kNoExtra) {
+			const auto& extra = kExtraTable[static_cast<std::size_t>(a_number.extraIndex)];
+			std::snprintf(a_number.text, sizeof(a_number.text), "%s %s", num, extra.segment);
+			a_number.subtext[0] = '\0';
+			return;
+		}
 		const char* prefix = "";
 		char locPrefix[20]{};
 		if (a_number.kind == DamageKind::kHealing) {
@@ -110,6 +116,16 @@ namespace FDNG
 		} else if (showAmp) {
 			std::snprintf(a_number.subtext, sizeof(a_number.subtext), "x%.1f", a_number.ampMult);
 		}
+
+		for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+			const auto shown = ExtraShownValue(kExtraTable[i], a_number.flags, a_number.extras);
+			if (settings->extraDisplay[i] != ExtraDisplay::kInline || shown < 1) {
+				continue;
+			}
+			const auto used = std::strlen(a_number.subtext);
+			std::snprintf(a_number.subtext + used, sizeof(a_number.subtext) - used, "%s%d %s",
+				used ? " " : "", shown, kExtraTable[i].segment);
+		}
 	}
 
 	void NumberManager::Spawn(const DamageEvent& a_event)
@@ -140,11 +156,13 @@ namespace FDNG
 				const float mergeWindow = a_event.kind == DamageKind::kHealing ?
 				                              std::max(settings->dotAccumulationWindow, 0.8f) :
 				                              settings->dotAccumulationWindow;
-				// Crits and locational hits stand alone; only plain numbers of
+				// Crits, sneak attacks, extras and locational hits stand alone; only plain numbers of
 				// the same origin merge — without the origin check, an NPC
 				// hitting the player's target folded into the player's number.
 				if (n.kind == a_event.kind && n.origin == a_event.origin &&
 					!n.flags.critical && !a_event.flags.critical &&
+					!n.flags.sneak && !a_event.flags.sneak &&
+					n.extraIndex == kNoExtra && a_event.extraIndex == kNoExtra &&
 					!n.flags.perfectBlock && !a_event.flags.perfectBlock &&
 					n.location[0] == '\0' && a_event.location[0] == '\0' &&
 					n.age < mergeWindow) {
@@ -179,6 +197,8 @@ namespace FDNG
 		n.kind = a_event.kind;
 		n.origin = a_event.origin;
 		n.flags = a_event.flags;
+		n.extras = a_event.extras;
+		n.extraIndex = a_event.extraIndex;
 		n.lifetime = settings->quadLifetimeSeconds * (a_event.flags.critical ? 1.35f : 1.0f);
 
 		// Screen-relative basis at the target: `right` is horizontal-perp to
