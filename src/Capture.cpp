@@ -215,10 +215,9 @@ namespace FDNG
 
 		if (pending.ranged && settings->showAmplification) {
 			// Locational mods scale totalDamage but not physicalDamage, so a
-			// total exceeding the physical+crit baseline implies an external
+			// total exceeding the physical baseline implies an external
 			// multiplier. Heuristic - display styling only.
-			const float critMult = pending.flags.critical ? std::max(a_hitData.criticalDamageMult, 1.0f) : 1.0f;
-			const float baseline = a_hitData.physicalDamage * critMult;
+			const float baseline = a_hitData.physicalDamage;
 			if (baseline > 0.1f) {
 				const float amp = a_hitData.totalDamage / baseline;
 				if (amp >= settings->amplificationThreshold) {
