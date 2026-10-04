@@ -58,6 +58,15 @@ namespace FDNG
 		DamageKind kind{ DamageKind::kPhysical };
 		OriginTier origin{ OriginTier::kNPC };
 		HitFlags flags;
+
+		// Public-API popups (Api.cpp): text shown verbatim in place of the
+		// number built from `amount`, a world-fixed anchor, and optional styling.
+		char customText[28]{};  // empty = a normal damage number
+		bool pinned{ false };   // anchor stays at `anchor` instead of following the victim's head
+		bool useColor{ false };
+		std::uint32_t colorRGB{ 0 };
+		float scale{ 1.0f };
+		float lifetimeSeconds{ 0.0f };  // 0 = the configured lifetime
 	};
 
 	// Damage-capture front end. THREADING CONTRACT: the engine writes actor
@@ -86,6 +95,16 @@ namespace FDNG
 		// From the hit-dispatch thunk: stash per-victim hit metadata so the
 		// matching weapon-hit event can consume it (POD only).
 		void OnHitData(const RE::HitData& a_hitData);
+
+		// Public API (FloatingDamageNGAPI.h): another mod claims the display of
+		// the next weapon hit on a victim. Any thread; the claim is consumed by
+		// that hit's processing and expires on its own.
+		struct HitClaim
+		{
+			bool suppressPopup{ false };     // withhold the number entirely (analytics still records)
+			bool suppressLocation{ false };  // keep the number, drop the locational tag + amp subtext
+		};
+		void ClaimHit(RE::FormID a_victimID, HitClaim a_claim);
 
 		// Main thread (render tick): drain and process the raw queue.
 		void ProcessQueued();
@@ -204,7 +223,8 @@ namespace FDNG
 		// drill-down (0 = unarmed/untracked).
 		void EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
 			float a_ampMult = 0.0f, const char* a_location = nullptr,
-			MitigationLabel a_mitLabel = MitigationLabel::kResisted, RE::FormID a_sourceID = 0);
+			MitigationLabel a_mitLabel = MitigationLabel::kResisted, RE::FormID a_sourceID = 0,
+			bool a_suppressPopup = false);
 
 		// EmitDamage with sub-threshold tick pooling (concentration spells
 		// apply in sub-point per-frame deltas).
@@ -218,6 +238,12 @@ namespace FDNG
 		// are natural regen trickle — discard them.
 		static constexpr auto kHealWindow = std::chrono::milliseconds(1500);
 
+		HitClaim TakeClaim(RE::FormID a_victimID);
+
+		// A claim is made by the hit's own handler, within the same frame or two
+		// of the hit; the margin only absorbs a slow frame.
+		static constexpr auto kClaimWindow = std::chrono::milliseconds(500);
+
 		void AuditRecord(RE::FormID a_victimID, float a_delta);  // negative = damage
 
 		// Raw ring: written by hooks on any thread, drained on the main thread.
@@ -229,6 +255,13 @@ namespace FDNG
 		std::mutex _lock;  // guards the maps below (event sink writes off-main)
 		std::unordered_map<RE::FormID, PendingHit> _pendingHits;
 		std::unordered_map<RE::FormID, RecentMagic> _recentMagic;
+
+		struct ClaimEntry
+		{
+			Clock::time_point stamp;
+			HitClaim claim;
+		};
+		std::unordered_map<RE::FormID, ClaimEntry> _claims;
 		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;  // keyed by PoolKey (healing included)
 
 		// Audit state (bDeltaAudit only; main thread)

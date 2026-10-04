@@ -402,6 +402,32 @@ namespace FDNG
 		}
 	}
 
+	void Capture::ClaimHit(RE::FormID a_victimID, HitClaim a_claim)
+	{
+		std::scoped_lock lk{ _lock };
+		const auto now = Clock::now();
+		std::erase_if(_claims, [&](const auto& a_entry) { return now - a_entry.second.stamp > kClaimWindow; });
+		auto& entry = _claims[a_victimID];
+		if (now - entry.stamp > kClaimWindow) {
+			entry = {};
+		}
+		entry.stamp = now;
+		entry.claim.suppressPopup |= a_claim.suppressPopup;
+		entry.claim.suppressLocation |= a_claim.suppressLocation;
+	}
+
+	Capture::HitClaim Capture::TakeClaim(RE::FormID a_victimID)
+	{
+		std::scoped_lock lk{ _lock };
+		const auto it = _claims.find(a_victimID);
+		if (it == _claims.end()) {
+			return {};
+		}
+		const auto claim = Clock::now() - it->second.stamp <= kClaimWindow ? it->second.claim : HitClaim{};
+		_claims.erase(it);
+		return claim;
+	}
+
 	void Capture::ProcessWeaponHit(const RawEvent& a_raw, RE::Actor* a_victim)
 	{
 		const auto amount = -a_raw.amount;
@@ -438,9 +464,15 @@ namespace FDNG
 			}
 		}
 
+		// Must precede the early-outs below: a filtered hit would otherwise leave its claim armed for the next one.
+		const auto claim = TakeClaim(a_raw.victimID);
+		if (claim.suppressLocation) {
+			ampMult = 0.0f;
+		}
+
 		if (flags.perfectBlock) {
 			const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
-			EmitDamage(a_victim, attacker, 0.0f, DamageKind::kPhysical, flags, 0.0f, 0.0f, nullptr, MitigationLabel::kBlocked, weaponID);
+			EmitDamage(a_victim, attacker, 0.0f, DamageKind::kPhysical, flags, 0.0f, 0.0f, nullptr, MitigationLabel::kBlocked, weaponID, claim.suppressPopup);
 			return;
 		}
 
@@ -451,7 +483,7 @@ namespace FDNG
 		// Locational tag for ranged hits: nearest skeleton node to the
 		// engine's contact point, matched against the configured patterns.
 		const auto settings = Settings::GetSingleton();
-		if (ranged && settings->showHitLocation && a_victim->Is3DLoaded()) {
+		if (ranged && settings->showHitLocation && !claim.suppressLocation && a_victim->Is3DLoaded()) {
 			constexpr float kNodeSearchRadius = 55.0f;  // reject contact points farther off the skeleton, game units
 			float bestDistSq = kNodeSearchRadius * kNodeSearchRadius;
 			if (const auto node = FindClosestNode(a_victim->Get3D(), hitPos, bestDistSq)) {
@@ -469,7 +501,7 @@ namespace FDNG
 
 		const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
 		AuditRecord(a_raw.victimID, a_raw.amount);
-		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel, weaponID);
+		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel, weaponID, claim.suppressPopup);
 	}
 
 	void Capture::ProcessAVDelta(const RawEvent& a_raw, RE::Actor* a_victim)
@@ -635,7 +667,8 @@ namespace FDNG
 	}
 
 	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
-		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel, RE::FormID a_sourceID)
+		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel, RE::FormID a_sourceID,
+		bool a_suppressPopup)
 	{
 		const auto settings = Settings::GetSingleton();
 		const auto origin = ClassifyOrigin(a_victim, a_attacker);
@@ -645,7 +678,7 @@ namespace FDNG
 
 		// Must stay after RecordDamage: analytics records every application
 		// regardless of display filters.
-		if (a_victim->IsDead()) {
+		if (a_victim->IsDead() || a_suppressPopup) {
 			return;
 		}
 
