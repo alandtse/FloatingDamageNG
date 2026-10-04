@@ -405,27 +405,13 @@ namespace FDNG
 	void Capture::ClaimHit(RE::FormID a_victimID, HitClaim a_claim)
 	{
 		std::scoped_lock lk{ _lock };
-		const auto now = Clock::now();
-		std::erase_if(_claims, [&](const auto& a_entry) { return now - a_entry.second.stamp > kClaimWindow; });
-		auto& entry = _claims[a_victimID];
-		if (now - entry.stamp > kClaimWindow) {
-			entry = {};
-		}
-		entry.stamp = now;
-		entry.claim.suppressPopup |= a_claim.suppressPopup;
-		entry.claim.suppressLocation |= a_claim.suppressLocation;
+		_claims.Add(a_victimID, a_claim, Clock::now());
 	}
 
-	Capture::HitClaim Capture::TakeClaim(RE::FormID a_victimID)
+	HitClaim Capture::TakeClaim(RE::FormID a_victimID)
 	{
 		std::scoped_lock lk{ _lock };
-		const auto it = _claims.find(a_victimID);
-		if (it == _claims.end()) {
-			return {};
-		}
-		const auto claim = Clock::now() - it->second.stamp <= kClaimWindow ? it->second.claim : HitClaim{};
-		_claims.erase(it);
-		return claim;
+		return _claims.Take(a_victimID, Clock::now());
 	}
 
 	void Capture::ProcessWeaponHit(const RawEvent& a_raw, RE::Actor* a_victim)

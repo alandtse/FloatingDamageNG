@@ -81,7 +81,7 @@ namespace FDNG::Api
 				if (a_victimFormID == 0 || (a_flags & kKnown) == 0) {
 					return false;
 				}
-				Capture::HitClaim claim;
+				HitClaim claim;
 				claim.suppressPopup = (a_flags & API::kClaim_SuppressPopup) != 0;
 				claim.suppressLocation = (a_flags & API::kClaim_SuppressLocation) != 0;
 				Capture::GetSingleton()->ClaimHit(a_victimFormID, claim);

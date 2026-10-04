@@ -50,6 +50,16 @@ add_files("src/UI.cpp")
 add_includedirs("src")
 target_end()
 
+-- Pure-logic tests: link no engine code, so they build and run without the
+-- game or CommonLib. `xmake test` runs them.
+target("FloatingDamageNG-tests")
+set_kind("binary")
+set_default(false)
+add_files("tests/*.cpp")
+add_includedirs("src")
+add_tests("hit-claims")
+target_end()
+
 target("FloatingDamageNG")
 add_deps("commonlibsse-ng", "FloatingDamageNG-UI")
 add_packages("imgui", "simpleini", "nlohmann_json", "imgui-vr-helper-api", "devbench-api")

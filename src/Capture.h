@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "HitClaims.h"
+
 namespace FDNG
 {
 	enum class DamageKind : std::uint8_t
@@ -99,11 +101,6 @@ namespace FDNG
 		// Public API (FloatingDamageNGAPI.h): another mod claims the display of
 		// the next weapon hit on a victim. Any thread; the claim is consumed by
 		// that hit's processing and expires on its own.
-		struct HitClaim
-		{
-			bool suppressPopup{ false };     // withhold the number entirely (analytics still records)
-			bool suppressLocation{ false };  // keep the number, drop the locational tag + amp subtext
-		};
 		void ClaimHit(RE::FormID a_victimID, HitClaim a_claim);
 
 		// Main thread (render tick): drain and process the raw queue.
@@ -255,13 +252,7 @@ namespace FDNG
 		std::mutex _lock;  // guards the maps below (event sink writes off-main)
 		std::unordered_map<RE::FormID, PendingHit> _pendingHits;
 		std::unordered_map<RE::FormID, RecentMagic> _recentMagic;
-
-		struct ClaimEntry
-		{
-			Clock::time_point stamp;
-			HitClaim claim;
-		};
-		std::unordered_map<RE::FormID, ClaimEntry> _claims;
+		HitClaimLedger _claims{ kClaimWindow };
 		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;  // keyed by PoolKey (healing included)
 
 		// Audit state (bDeltaAudit only; main thread)
