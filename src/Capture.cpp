@@ -14,6 +14,7 @@ namespace FDNG
 		// Windows never maps the first 64 KiB of a process's address space, so
 		// any real Actor* is guaranteed to be >= this.
 		constexpr std::uintptr_t kMinValidUserAddress = 0x10000;
+		constexpr float kMinHitTotalDamage = 0.01f;
 
 		RE::NiPoint3 GetAnchorPos(RE::Actor* a_actor)
 		{
@@ -474,7 +475,7 @@ namespace FDNG
 		}
 
 		const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
-		if (hitTotalDamage > 0.01f) {
+		if (hitTotalDamage > kMinHitTotalDamage) {
 			mitigated *= amount / hitTotalDamage;
 		}
 
