@@ -95,6 +95,39 @@ namespace FDNG
 		// missed damage. Main thread.
 		void AuditTick();
 
+		// One captured engine callback; recorded only while devbench is enabled.
+		struct TraceEntry
+		{
+			enum class Type : std::uint8_t
+			{
+				kRaw,
+				kHit,
+			};
+			Type type{ Type::kRaw };
+			double seconds{ 0.0 };
+			std::uint8_t source{ 0 };
+			std::uint8_t av{ 0 };
+			RE::FormID victimID{ 0 };
+			RE::FormID attackerID{ 0 };
+			RE::FormID mgefID{ 0 };
+			float amount{ 0.0f };
+			bool deadAtQueue{ false };
+			bool deadAtProcess{ false };
+			float totalDamage{ 0.0f };
+			float physicalDamage{ 0.0f };
+			float knockback{ 0.0f };
+			float percentBlocked{ 0.0f };
+			float resistedPhysical{ 0.0f };
+			float resistedTyped{ 0.0f };
+			float stagger{ 0.0f };
+			RE::FormID weaponID{ 0 };
+			float reflected{ 0.0f };
+			float sneakMult{ 1.0f };
+			std::uint32_t hitFlags{ 0 };
+		};
+
+		std::vector<TraceEntry> GetTrace();
+
 		RE::BSEventNotifyControl ProcessEvent(const RE::TESMagicEffectApplyEvent* a_event, RE::BSTEventSource<RE::TESMagicEffectApplyEvent>*) override;
 
 	private:
@@ -116,6 +149,7 @@ namespace FDNG
 			RE::FormID attackerID{ 0 };
 			RE::FormID mgefID{ 0 };
 			float amount{ 0.0f };  // signed engine delta (negative = damage)
+			bool victimDead{ false };
 		};
 
 		struct PendingHit
@@ -180,6 +214,7 @@ namespace FDNG
 		static DamageKind ClassifyMagicKind(const RE::EffectSetting* a_mgef);
 
 		void QueueRaw(const RawEvent& a_event);
+		void RecordTrace(TraceEntry a_entry);
 
 		// Pool key: one accumulator per victim and damage kind.
 		static std::uint64_t PoolKey(RE::FormID a_victimID, DamageKind a_kind)
@@ -230,6 +265,10 @@ namespace FDNG
 		std::unordered_map<RE::FormID, PendingHit> _pendingHits;
 		std::unordered_map<RE::FormID, RecentMagic> _recentMagic;
 		std::unordered_map<std::uint64_t, TickAccum> _tickAccums;  // keyed by PoolKey (healing included)
+
+		static constexpr std::size_t kTraceCapacity = 4096;
+		std::deque<TraceEntry> _trace;  // guarded by _lock
+		Clock::time_point _traceStart{};
 
 		// Audit state (bDeltaAudit only; main thread)
 		struct AuditEntry
