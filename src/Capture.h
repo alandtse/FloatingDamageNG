@@ -37,6 +37,22 @@ namespace FDNG
 		bool perfectBlock{ false };  // kBlockWithWeapon with ~0 damage through - a full negation
 	};
 
+	struct HitExtras
+	{
+		float critBonus{ 0.0f };
+		float sneakBonus{ 0.0f };
+		float reflected{ 0.0f };
+	};
+
+	enum class ExtraDisplay : std::uint8_t
+	{
+		kOff = 0,
+		kInline,
+		kSeparate,
+	};
+
+	inline constexpr int kNoExtra = -1;
+
 	// Word used for the mitigation subtext — mitigation has different causes.
 	enum class MitigationLabel : std::uint8_t
 	{
@@ -58,6 +74,8 @@ namespace FDNG
 		DamageKind kind{ DamageKind::kPhysical };
 		OriginTier origin{ OriginTier::kNPC };
 		HitFlags flags;
+		HitExtras extras;
+		int extraIndex{ kNoExtra };  // kExtraTable row of an informational number; analytics never sees these
 	};
 
 	// Damage-capture front end. THREADING CONTRACT: the engine writes actor
@@ -128,6 +146,8 @@ namespace FDNG
 			float resistedTyped{ 0.0f };     // enchant payload resisted
 			float blockedDamage{ 0.0f };     // reconstructed from percentBlocked
 			float ampMult{ 0.0f };
+			float reflected{ 0.0f };
+			float sneakMult{ 1.0f };
 			bool ranged{ false };  // bow/crossbow hit — locational + amplification apply
 			HitFlags flags;
 		};
@@ -179,6 +199,8 @@ namespace FDNG
 
 		static DamageKind ClassifyMagicKind(const RE::EffectSetting* a_mgef);
 
+		static float WeaponCritBonus(RE::Actor* a_attacker, RE::Actor* a_victim, RE::FormID a_weaponID);
+
 		void QueueRaw(const RawEvent& a_event);
 
 		// Pool key: one accumulator per victim and damage kind.
@@ -204,7 +226,7 @@ namespace FDNG
 		// drill-down (0 = unarmed/untracked).
 		void EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
 			float a_ampMult = 0.0f, const char* a_location = nullptr,
-			MitigationLabel a_mitLabel = MitigationLabel::kResisted, RE::FormID a_sourceID = 0);
+			MitigationLabel a_mitLabel = MitigationLabel::kResisted, RE::FormID a_sourceID = 0, const HitExtras& a_extras = {});
 
 		// EmitDamage with sub-threshold tick pooling (concentration spells
 		// apply in sub-point per-frame deltas).

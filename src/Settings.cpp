@@ -107,6 +107,10 @@ namespace FDNG
 		}
 
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+			extraDisplay[i] = static_cast<ExtraDisplay>(std::clamp<long>(
+				ini.GetLongValue("Behavior", kExtraTable[i].iniKey, std::to_underlying(extraDisplay[i])), 0, 2));
+		}
 		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
@@ -249,6 +253,9 @@ namespace FDNG
 		}
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+			ini.SetLongValue("Behavior", kExtraTable[i].iniKey, std::to_underlying(extraDisplay[i]));
+		}
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
 		ini.SetDoubleValue("Behavior", "fMinHealToShow", minHealToShow);
 		ini.SetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow);

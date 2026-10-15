@@ -345,6 +345,14 @@ namespace FDNG::UI
 				Tip("Hostile drains only (frost spells, absorb effects). Sprinting and power attacks never show.");
 				ImGuiMCP::Checkbox("Mitigation subtext", &s->showMitigation);
 				Tip("The small \"(-45 armor)\" / \"(-20 resisted)\" line under a number.");
+				for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+					int mode = static_cast<int>(s->extraDisplay[i]);
+					const char* modes[] = { "Off", "Under the number", "Separate number" };
+					if (ImGuiMCP::Combo(kExtraTable[i].uiLabel, &mode, modes, 3, -1)) {
+						s->extraDisplay[i] = static_cast<ExtraDisplay>(mode);
+					}
+					Tip(kExtraTable[i].uiTip);
+				}
 				ImGuiMCP::Checkbox("Hit location tags", &s->showHitLocation);
 				Tip("HEADSHOT etc. on bow/crossbow hits, from where the arrow actually struck.");
 				ImGuiMCP::SliderFloat("NPC visibility radius (m)", &s->maxVisibilityRadiusMeters, 5.0f, 100.0f, "%.0f", 0);
