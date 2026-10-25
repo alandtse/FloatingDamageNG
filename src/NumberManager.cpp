@@ -65,6 +65,10 @@ namespace FDNG
 
 	void NumberManager::BuildText(Number& a_number) const
 	{
+		if (a_number.custom) {
+			return;  // text was set verbatim at spawn
+		}
+
 		if (a_number.flags.perfectBlock) {
 			std::snprintf(a_number.text, sizeof(a_number.text), "PERFECT BLOCK");
 			a_number.subtext[0] = '\0';
@@ -143,7 +147,8 @@ namespace FDNG
 				// Crits and locational hits stand alone; only plain numbers of
 				// the same origin merge — without the origin check, an NPC
 				// hitting the player's target folded into the player's number.
-				if (n.kind == a_event.kind && n.origin == a_event.origin &&
+				if (!n.custom && a_event.customText[0] == '\0' &&
+					n.kind == a_event.kind && n.origin == a_event.origin &&
 					!n.flags.critical && !a_event.flags.critical &&
 					!n.flags.perfectBlock && !a_event.flags.perfectBlock &&
 					n.location[0] == '\0' && a_event.location[0] == '\0' &&
@@ -179,7 +184,17 @@ namespace FDNG
 		n.kind = a_event.kind;
 		n.origin = a_event.origin;
 		n.flags = a_event.flags;
-		n.lifetime = settings->quadLifetimeSeconds * (a_event.flags.critical ? 1.35f : 1.0f);
+		n.lifetime = a_event.lifetimeSeconds > 0.0f ? a_event.lifetimeSeconds :
+		                                              settings->quadLifetimeSeconds * (a_event.flags.critical ? 1.35f : 1.0f);
+		n.pinned = a_event.pinned;
+		n.useColor = a_event.useColor;
+		n.colorRGB = a_event.colorRGB;
+		n.scale = a_event.scale;
+		if (a_event.customText[0] != '\0') {
+			n.custom = true;
+			std::memcpy(n.text, a_event.customText, sizeof(n.text));
+			n.text[sizeof(n.text) - 1] = '\0';
+		}
 
 		// Screen-relative basis at the target: `right` is horizontal-perp to
 		// the player's view, `up` is world Z. Rapid hits de-overlap and burst
@@ -390,7 +405,7 @@ namespace FDNG
 
 			// Follow the victim while they're loaded (moving enemies, the
 			// player mid-heal); keep the last anchor when they unload.
-			if (const auto victim = RE::TESForm::LookupByID<RE::Actor>(n.victimID); victim && victim->Is3DLoaded()) {
+			if (const auto victim = n.pinned ? nullptr : RE::TESForm::LookupByID<RE::Actor>(n.victimID); victim && victim->Is3DLoaded()) {
 				if (const auto middle = victim->GetMiddleHighProcess(); middle && middle->headNode) {
 					n.anchor = middle->headNode->world.translate;
 				}
@@ -447,7 +462,7 @@ namespace FDNG
 			ResolvedNumber resolved;
 			resolved.number = &n;
 			resolved.worldPos = n.anchor + n.spread + originShift + KinematicOffset(n);
-			resolved.scale = scaleMult * magnitudeScale;
+			resolved.scale = scaleMult * magnitudeScale * n.scale;
 			resolved.alpha = alphaMult;
 			a_out.push_back(resolved);
 		}
