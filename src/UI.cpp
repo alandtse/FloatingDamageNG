@@ -634,7 +634,17 @@ namespace FDNG::UI
 				ImGuiMCP::Checkbox("Export CSV", &s->exportCsv);
 				Tip("One row per combatant per session to FloatingDamageNG-combatants.csv - for Excel/Sheets.");
 				ImGuiMCP::Checkbox("Live DPS readout", &s->enableLiveDPSWindow);
-				Tip("Small combat overlay: top-right on flat, head-locked HUD plane in VR.");
+				Tip("Small combat overlay on screen (head-locked HUD plane in VR): damage, time and DPS, plus the options below.");
+				ImGuiMCP::BeginDisabled(!s->enableLiveDPSWindow);
+				ImGuiMCP::Checkbox("  Show damage taken", &s->hudShowTaken);
+				ImGuiMCP::Checkbox("  Show hits / crit rate / biggest hit", &s->hudShowHits);
+				ImGuiMCP::SliderInt("  Top damage dealers", &s->hudTopRows, 0, 5, "%d", 0);
+				Tip("How many combatants to list by damage dealt. 0 hides the list.");
+				ImGuiMCP::SliderFloat("  Recap hold (s)", &s->hudRecapHoldSeconds, 0.0f, 30.0f, "%.0f", 0);
+				Tip("After combat ends the panel becomes a recap that stays fully visible this long, then fades out.");
+				static const char* kCorners[] = { "Top right", "Top left", "Bottom right", "Bottom left" };
+				ImGuiMCP::Combo("  Screen corner", &s->hudCorner, kCorners, 4, -1);
+				ImGuiMCP::EndDisabled();
 				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);
 				if (ImGuiMCP::Checkbox("devbench integration", &s->enableDevBench) && s->enableDevBench) {
 					DevBench::Connect();

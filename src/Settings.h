@@ -207,7 +207,12 @@ namespace FDNG
 		bool exportJsonl{ false };          // append sessions to FloatingDamageNG-sessions.jsonl (one JSON object/line)
 		bool exportCsv{ false };            // append per-combatant rows to FloatingDamageNG-combatants.csv
 		bool enableLiveDPSWindow{ false };  // opt-in: an uninvited second HUD element surprises users
+		bool hudShowTaken{ true };
+		bool hudShowHits{ true };  // hit count, crit rate, biggest hit
+		int hudTopRows{ 3 };
+		int hudCorner{ 0 };  // 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left
 		bool logFollowerPerformance{ true };
+		float hudRecapHoldSeconds{ 6.0f };
 		float postCombatWindowFadeSeconds{ 5.0f };
 		// Opt-in: registering with devbench exposes combat stats on the port
 		// the devbench host binds, so it is off unless the user enables it.

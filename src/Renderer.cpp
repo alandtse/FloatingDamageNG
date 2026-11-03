@@ -66,21 +66,49 @@ namespace FDNG::Renderer
 			if (!settings->enableCombatLog || !settings->enableLiveDPSWindow) {
 				return;
 			}
-			const auto stats = CombatLog::GetSingleton()->GetLiveStats();
-			if (!stats.active && stats.secondsSinceEnd > settings->postCombatWindowFadeSeconds) {
+			const auto stats = CombatLog::GetSingleton()->GetLiveStats(settings->hudTopRows);
+			const float hold = settings->hudRecapHoldSeconds;
+			const float fade = std::max(settings->postCombatWindowFadeSeconds, 0.1f);
+			const float sinceEnd = stats.secondsSinceEnd;
+			if (!stats.active && sinceEnd > hold + fade) {
 				return;
 			}
+			const bool recap = !stats.active;
 
-			const float alpha = stats.active ? 0.85f : 0.85f * (1.0f - stats.secondsSinceEnd / settings->postCombatWindowFadeSeconds);
+			const float alpha = (!recap || sinceEnd <= hold) ? 0.85f : 0.85f * (1.0f - (sinceEnd - hold) / fade);
 			const auto displaySize = ImGui::GetIO().DisplaySize;
-			ImGui::SetNextWindowPos(ImVec2(displaySize.x - 20.0f, 20.0f), ImGuiCond_Always, ImVec2(1.0f, 0.0f));
+			const bool right = settings->hudCorner == 0 || settings->hudCorner == 2;
+			const bool bottom = settings->hudCorner >= 2;
+			ImGui::SetNextWindowPos(ImVec2(right ? displaySize.x - 20.0f : 20.0f, bottom ? displaySize.y - 20.0f : 20.0f),
+				ImGuiCond_Always, ImVec2(right ? 1.0f : 0.0f, bottom ? 1.0f : 0.0f));
 			ImGui::SetNextWindowBgAlpha(alpha * 0.4f);
 			ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
 			if (ImGui::Begin("##FDNGDPS", nullptr,
 					ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
 						ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav)) {
+				if (recap) {
+					ImGui::TextUnformatted("Combat recap");
+				}
 				ImGui::Text("%.0f dmg  %.1fs", stats.playerDamage, stats.sessionSeconds);
 				ImGui::Text("DPS %.1f real / %.1f active", stats.realDPS, stats.activeDPS);
+				if (settings->hudShowHits && stats.hits > 0) {
+					ImGui::Text("%d hits  %.0f%% crit  best %.0f", stats.hits,
+						100.0f * static_cast<float>(stats.crits) / static_cast<float>(stats.hits), stats.biggestHit);
+				}
+				if (settings->hudShowTaken) {
+					ImGui::Text("Taken %.0f", stats.damageTaken);
+				}
+				if (recap) {
+					if (stats.healingReceived > 0.0f) {
+						ImGui::Text("Healed %.0f", stats.healingReceived);
+					}
+					if (stats.kills > 0) {
+						ImGui::Text("Kills %d", stats.kills);
+					}
+				}
+				for (const auto& [name, dealt] : stats.topDealers) {
+					ImGui::Text("%s  %.0f", name.c_str(), dealt);
+				}
 			}
 			ImGui::End();
 			ImGui::PopStyleVar();
