@@ -60,6 +60,13 @@ namespace FDNG::Renderer
 
 		// Small live DPS readout; lingers for the configured fade
 		// window after combat ends.
+		// Text tints for the top-dealer rows. Separate from the origin-marker
+		// palette, whose dark fills are made for outlines, not for text on a HUD.
+		constexpr std::uint32_t kDealerPlayer = 0xFFD60A;
+		constexpr std::uint32_t kDealerFollower = 0x5AC8FA;
+		constexpr std::uint32_t kDealerHostile = 0xFF6B5E;
+		constexpr std::uint32_t kDealerOther = 0xE0E0E0;
+
 		void DrawLiveDPSWindow()
 		{
 			const auto settings = Settings::GetSingleton();
@@ -86,28 +93,78 @@ namespace FDNG::Renderer
 			if (ImGui::Begin("##FDNGDPS", nullptr,
 					ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
 						ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav)) {
+				ImGui::SetWindowFontScale(settings->hudFontScale);
+				const bool tint = settings->hudColorStats;
+				const auto rgb = [](std::uint32_t a_rgb) {
+					return ImVec4(static_cast<float>((a_rgb >> 16) & 0xFF) / 255.0f, static_cast<float>((a_rgb >> 8) & 0xFF) / 255.0f,
+						static_cast<float>(a_rgb & 0xFF) / 255.0f, 1.0f);
+				};
+				const ImVec4 white(1.0f, 1.0f, 1.0f, 1.0f);
+				const ImVec4 labelColor = tint ? ImVec4(0.62f, 0.62f, 0.62f, 1.0f) : white;
+				const auto valueColor = [&](std::uint32_t a_rgb) { return tint ? rgb(a_rgb) : white; };
+
 				if (recap) {
-					ImGui::TextUnformatted("Combat recap");
+					ImGui::TextColored(valueColor(settings->colorCritical), "Combat recap");
 				}
-				ImGui::Text("%.0f dmg  %.1fs", stats.playerDamage, stats.sessionSeconds);
-				ImGui::Text("DPS %.1f real / %.1f active", stats.realDPS, stats.activeDPS);
-				if (settings->hudShowHits && stats.hits > 0) {
-					ImGui::Text("%d hits  %.0f%% crit  best %.0f", stats.hits,
-						100.0f * static_cast<float>(stats.crits) / static_cast<float>(stats.hits), stats.biggestHit);
-				}
-				if (settings->hudShowTaken) {
-					ImGui::Text("Taken %.0f", stats.damageTaken);
-				}
-				if (recap) {
-					if (stats.healingReceived > 0.0f) {
-						ImGui::Text("Healed %.0f", stats.healingReceived);
+				if (ImGui::BeginTable("##FDNGDPSRows", 2, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_NoSavedSettings)) {
+					// Value cells are right-aligned so the numbers line up in one column.
+					const auto row = [&](const char* a_label, const ImVec4& a_labelColor, const ImVec4& a_valueColor, const char* a_value) {
+						ImGui::TableNextRow();
+						ImGui::TableNextColumn();
+						ImGui::TextColored(a_labelColor, "%s", a_label);
+						ImGui::TableNextColumn();
+						const float slack = ImGui::GetContentRegionAvail().x - ImGui::CalcTextSize(a_value).x;
+						if (slack > 0.0f) {
+							ImGui::SetCursorPosX(ImGui::GetCursorPosX() + slack);
+						}
+						ImGui::TextColored(a_valueColor, "%s", a_value);
+					};
+					char buf[96];
+
+					std::snprintf(buf, sizeof(buf), "%.0f in %.1fs", stats.playerDamage, stats.sessionSeconds);
+					row("Damage", labelColor, white, buf);
+					std::snprintf(buf, sizeof(buf), "%.1f real / %.1f active", stats.realDPS, stats.activeDPS);
+					row("DPS", labelColor, white, buf);
+					if (settings->hudShowHits && stats.hits > 0) {
+						std::snprintf(buf, sizeof(buf), "%d hits  %.0f%% crit  best %.0f", stats.hits,
+							100.0f * static_cast<float>(stats.crits) / static_cast<float>(stats.hits), stats.biggestHit);
+						row("Hits", labelColor, valueColor(settings->colorCritical), buf);
 					}
-					if (stats.kills > 0) {
-						ImGui::Text("Kills %d", stats.kills);
+					if (settings->hudShowTaken) {
+						std::snprintf(buf, sizeof(buf), "%.0f", stats.damageTaken);
+						row("Taken", labelColor, valueColor(settings->colorPhysical), buf);
 					}
-				}
-				for (const auto& [name, dealt] : stats.topDealers) {
-					ImGui::Text("%s  %.0f", name.c_str(), dealt);
+					if (recap && stats.healingReceived > 0.0f) {
+						std::snprintf(buf, sizeof(buf), "%.0f", stats.healingReceived);
+						row("Healed", labelColor, valueColor(settings->colorHealing), buf);
+					}
+					if (recap && stats.kills > 0) {
+						std::snprintf(buf, sizeof(buf), "%d", stats.kills);
+						row("Kills", labelColor, valueColor(settings->colorCritical), buf);
+					}
+
+					int rank = 0;
+					for (const auto& dealer : stats.topDealers) {
+						std::uint32_t color = kDealerOther;
+						switch (dealer.relation) {
+						case CombatLog::LiveStats::DealerRelation::kPlayer:
+							color = kDealerPlayer;
+							break;
+						case CombatLog::LiveStats::DealerRelation::kFollower:
+							color = kDealerFollower;
+							break;
+						case CombatLog::LiveStats::DealerRelation::kHostile:
+							color = kDealerHostile;
+							break;
+						default:
+							break;
+						}
+						std::snprintf(buf, sizeof(buf), "%d. %s", ++rank, dealer.name.c_str());
+						char dmg[24];
+						std::snprintf(dmg, sizeof(dmg), "%.0f", dealer.damage);
+						row(buf, valueColor(color), white, dmg);
+					}
+					ImGui::EndTable();
 				}
 			}
 			ImGui::End();

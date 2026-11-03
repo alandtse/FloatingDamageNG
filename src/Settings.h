@@ -210,7 +210,9 @@ namespace FDNG
 		bool hudShowTaken{ true };
 		bool hudShowHits{ true };  // hit count, crit rate, biggest hit
 		int hudTopRows{ 3 };
-		int hudCorner{ 0 };  // 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left
+		int hudCorner{ 0 };          // 0 top-right, 1 top-left, 2 bottom-right, 3 bottom-left
+		float hudFontScale{ 1.0f };  // 0.75-2.0, multiplies the panel's text size
+		bool hudColorStats{ true };  // tint values by meaning and dealers by relationship
 		bool logFollowerPerformance{ true };
 		float hudRecapHoldSeconds{ 6.0f };
 		float postCombatWindowFadeSeconds{ 5.0f };

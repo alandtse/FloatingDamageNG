@@ -155,6 +155,8 @@ namespace FDNG
 		hudShowHits = ini.GetBoolValue("Analytics", "bHudShowHits", hudShowHits);
 		hudTopRows = std::clamp(static_cast<int>(ini.GetLongValue("Analytics", "iHudTopRows", hudTopRows)), 0, 5);
 		hudCorner = std::clamp(static_cast<int>(ini.GetLongValue("Analytics", "iHudCorner", hudCorner)), 0, 3);
+		hudFontScale = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fHudFontScale", hudFontScale)), 0.75f, 2.0f);
+		hudColorStats = ini.GetBoolValue("Analytics", "bHudColorStats", hudColorStats);
 		logFollowerPerformance = ini.GetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
 		hudRecapHoldSeconds = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fHudRecapHoldSeconds", hudRecapHoldSeconds)), 0.0f, 60.0f);
 		postCombatWindowFadeSeconds = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds)), 0.5f, 30.0f);
@@ -267,6 +269,8 @@ namespace FDNG
 		ini.SetBoolValue("Analytics", "bHudShowHits", hudShowHits);
 		ini.SetLongValue("Analytics", "iHudTopRows", hudTopRows);
 		ini.SetLongValue("Analytics", "iHudCorner", hudCorner);
+		ini.SetDoubleValue("Analytics", "fHudFontScale", hudFontScale);
+		ini.SetBoolValue("Analytics", "bHudColorStats", hudColorStats);
 		ini.SetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
 		ini.SetDoubleValue("Analytics", "fHudRecapHoldSeconds", hudRecapHoldSeconds);
 		ini.SetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds);

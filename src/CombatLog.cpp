@@ -581,12 +581,20 @@ namespace FDNG
 		if (a_topRows > 0) {
 			for (const auto& [id, c] : _combatants) {
 				if (c.damageDealt > 0.0f) {
-					stats.topDealers.emplace_back(c.name, c.damageDealt);
+					auto relation = LiveStats::DealerRelation::kOther;
+					if (id == kPlayerID) {
+						relation = LiveStats::DealerRelation::kPlayer;
+					} else if (c.isFollower) {
+						relation = LiveStats::DealerRelation::kFollower;
+					} else if (c.isHostileToPlayer) {
+						relation = LiveStats::DealerRelation::kHostile;
+					}
+					stats.topDealers.push_back({ c.name, c.damageDealt, relation });
 				}
 			}
 			const auto n = std::min<std::size_t>(static_cast<std::size_t>(a_topRows), stats.topDealers.size());
 			std::partial_sort(stats.topDealers.begin(), stats.topDealers.begin() + n, stats.topDealers.end(),
-				[](const auto& a, const auto& b) { return a.second > b.second; });
+				[](const auto& a, const auto& b) { return a.damage > b.damage; });
 			stats.topDealers.resize(n);
 		}
 		return stats;

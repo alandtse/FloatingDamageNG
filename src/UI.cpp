@@ -644,6 +644,10 @@ namespace FDNG::UI
 				Tip("After combat ends the panel becomes a recap that stays fully visible this long, then fades out.");
 				static const char* kCorners[] = { "Top right", "Top left", "Bottom right", "Bottom left" };
 				ImGuiMCP::Combo("  Screen corner", &s->hudCorner, kCorners, 4, -1);
+				ImGuiMCP::SliderFloat("  Text size", &s->hudFontScale, 0.75f, 2.0f, "%.2fx", 0);
+				Tip("Scales the panel text. It uses your chosen default damage font.");
+				ImGuiMCP::Checkbox("  Color-code stats", &s->hudColorStats);
+				Tip("Tints damage taken, healing and kills, and colors the top dealers by you, followers and enemies.");
 				ImGuiMCP::EndDisabled();
 				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);
 				if (ImGuiMCP::Checkbox("devbench integration", &s->enableDevBench) && s->enableDevBench) {

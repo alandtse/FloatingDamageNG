@@ -42,7 +42,21 @@ namespace FDNG
 			int crits{ 0 };
 			int kills{ 0 };  // killing blows credited to the player
 			float healingReceived{ 0.0f };
-			std::vector<std::pair<std::string, float>> topDealers;
+
+			enum class DealerRelation
+			{
+				kPlayer,
+				kFollower,
+				kHostile,
+				kOther
+			};
+			struct Dealer
+			{
+				std::string name;
+				float damage{ 0.0f };
+				DealerRelation relation{ DealerRelation::kOther };
+			};
+			std::vector<Dealer> topDealers;
 		};
 
 		// One row of a drill-down table (per damage source or per target).
