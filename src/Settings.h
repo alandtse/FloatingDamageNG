@@ -91,6 +91,7 @@ namespace FDNG
 		void ResetToDefaults();  // in-memory only; Save() to persist
 
 		// [CoreFilters]
+		bool showEvade{ false };
 		bool enableFloatingDamage{ true };  // master switch; the show* flags below only matter while this is on
 		bool showPlayerDamageDealt{ true };
 		bool showFollowerDamageDealt{ true };
@@ -169,6 +170,7 @@ namespace FDNG
 		std::uint32_t colorPhysical{ 0xFF3B30 };
 		std::uint32_t colorCritical{ 0xFFCC00 };
 		std::uint32_t colorBlocked{ 0x4A4A4A };
+		std::uint32_t colorEvade{ 0x8FD3FF };
 		std::uint32_t colorFire{ 0xFF9500 };
 		std::uint32_t colorFrost{ 0x5AC8FA };
 		std::uint32_t colorShock{ 0xAF52DE };
@@ -235,10 +237,11 @@ namespace FDNG
 		const char* uiLabel;
 		std::uint32_t Settings::* field;
 	};
-	inline constexpr std::array<ColorDef, 15> kColorTable{ {
+	inline constexpr std::array<ColorDef, 16> kColorTable{ {
 		{ "sPhysical", "Physical", &Settings::colorPhysical },
 		{ "sCritical", "Critical", &Settings::colorCritical },
 		{ "sBlocked", "Blocked", &Settings::colorBlocked },
+		{ "sEvade", "Evade", &Settings::colorEvade },
 		{ "sFire", "Fire", &Settings::colorFire },
 		{ "sFrost", "Frost", &Settings::colorFrost },
 		{ "sShock", "Shock", &Settings::colorShock },
