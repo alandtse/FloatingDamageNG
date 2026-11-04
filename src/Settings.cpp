@@ -108,6 +108,10 @@ namespace FDNG
 		}
 
 		showMitigation = ini.GetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+			extraDisplay[i] = static_cast<ExtraDisplay>(std::clamp<long>(
+				ini.GetLongValue("Behavior", kExtraTable[i].iniKey, std::to_underlying(extraDisplay[i])), 0, 2));
+		}
 		minDamageToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow));
 		minHealToShow = static_cast<float>(ini.GetDoubleValue("Behavior", "fMinHealToShow", minHealToShow));
 		dotAccumulationWindow = static_cast<float>(ini.GetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow));
@@ -154,7 +158,14 @@ namespace FDNG
 		exportJsonl = ini.GetBoolValue("Analytics", "bExportJsonl", exportJsonl);
 		exportCsv = ini.GetBoolValue("Analytics", "bExportCsv", exportCsv);
 		enableLiveDPSWindow = ini.GetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
+		hudShowTaken = ini.GetBoolValue("Analytics", "bHudShowTaken", hudShowTaken);
+		hudShowHits = ini.GetBoolValue("Analytics", "bHudShowHits", hudShowHits);
+		hudTopRows = std::clamp(static_cast<int>(ini.GetLongValue("Analytics", "iHudTopRows", hudTopRows)), 0, 5);
+		hudCorner = std::clamp(static_cast<int>(ini.GetLongValue("Analytics", "iHudCorner", hudCorner)), 0, 3);
+		hudFontScale = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fHudFontScale", hudFontScale)), 0.75f, 2.0f);
+		hudColorStats = ini.GetBoolValue("Analytics", "bHudColorStats", hudColorStats);
 		logFollowerPerformance = ini.GetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
+		hudRecapHoldSeconds = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fHudRecapHoldSeconds", hudRecapHoldSeconds)), 0.0f, 60.0f);
 		postCombatWindowFadeSeconds = std::clamp(static_cast<float>(ini.GetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds)), 0.5f, 30.0f);
 		enableDevBench = ini.GetBoolValue("Analytics", "bEnableDevBench", enableDevBench);
 
@@ -253,6 +264,9 @@ namespace FDNG
 		}
 
 		ini.SetBoolValue("Behavior", "bShowMitigation", showMitigation);
+		for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+			ini.SetLongValue("Behavior", kExtraTable[i].iniKey, std::to_underlying(extraDisplay[i]));
+		}
 		ini.SetDoubleValue("Behavior", "fMinDamageToShow", minDamageToShow);
 		ini.SetDoubleValue("Behavior", "fMinHealToShow", minHealToShow);
 		ini.SetDoubleValue("Behavior", "fDotAccumulationWindow", dotAccumulationWindow);
@@ -264,7 +278,14 @@ namespace FDNG
 		ini.SetBoolValue("Analytics", "bExportJsonl", exportJsonl);
 		ini.SetBoolValue("Analytics", "bExportCsv", exportCsv);
 		ini.SetBoolValue("Analytics", "bEnableLiveDPSWindow", enableLiveDPSWindow);
+		ini.SetBoolValue("Analytics", "bHudShowTaken", hudShowTaken);
+		ini.SetBoolValue("Analytics", "bHudShowHits", hudShowHits);
+		ini.SetLongValue("Analytics", "iHudTopRows", hudTopRows);
+		ini.SetLongValue("Analytics", "iHudCorner", hudCorner);
+		ini.SetDoubleValue("Analytics", "fHudFontScale", hudFontScale);
+		ini.SetBoolValue("Analytics", "bHudColorStats", hudColorStats);
 		ini.SetBoolValue("Analytics", "bLogFollowerPerformance", logFollowerPerformance);
+		ini.SetDoubleValue("Analytics", "fHudRecapHoldSeconds", hudRecapHoldSeconds);
 		ini.SetDoubleValue("Analytics", "fPostCombatWindowFadeSeconds", postCombatWindowFadeSeconds);
 		ini.SetBoolValue("Analytics", "bEnableDevBench", enableDevBench);
 

@@ -193,9 +193,13 @@ namespace FDNG
 		pending.resistedPhysical = std::max(0.0f, a_hitData.resistedPhysicalDamage);
 		pending.resistedTyped = std::max(0.0f, a_hitData.resistedTypedDamage);
 		pending.weaponID = a_hitData.weapon ? a_hitData.weapon->GetFormID() : 0;
+		pending.reflected = a_hitData.reflectedDamage;
 		pending.flags.critical = a_hitData.flags.any(RE::HitData::Flag::kCritical);
 		pending.flags.blocked = a_hitData.flags.any(RE::HitData::Flag::kBlocked);
 		pending.flags.sneak = a_hitData.flags.any(RE::HitData::Flag::kSneakAttack);
+		if (pending.flags.sneak) {
+			pending.sneakMult = std::max(a_hitData.bonusHealthDamageMult, 1.0f);
+		}
 		pending.flags.powerAttack = a_hitData.flags.any(RE::HitData::Flag::kPowerAttack);
 		pending.flags.bash = a_hitData.flags.any(RE::HitData::Flag::kBash);
 		pending.flags.timedBash = a_hitData.flags.any(RE::HitData::Flag::kTimedBash);
@@ -504,6 +508,9 @@ namespace FDNG
 		bool ranged = false;
 		RE::FormID weaponID = 0;
 		RE::NiPoint3 hitPos;
+		HitExtras extras;
+		float physicalDamage = 0.0f;
+		float sneakMult = 1.0f;
 		float hitTotalDamage = 0.0f;
 		{
 			std::scoped_lock lk{ _lock };
@@ -522,6 +529,9 @@ namespace FDNG
 				ranged = it->second.ranged;
 				weaponID = it->second.weaponID;
 				hitPos = it->second.hitPos;
+				extras.reflected = it->second.reflected;
+				physicalDamage = it->second.physicalDamage;
+				sneakMult = it->second.sneakMult;
 				hitTotalDamage = it->second.totalDamage;
 				_pendingHits.erase(it);
 			}
@@ -535,7 +545,7 @@ namespace FDNG
 
 		if (flags.perfectBlock) {
 			const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
-			EmitDamage(a_victim, attacker, 0.0f, DamageKind::kPhysical, flags, 0.0f, 0.0f, nullptr, MitigationLabel::kBlocked, weaponID, claim.suppressPopup);
+			EmitDamage(a_victim, attacker, 0.0f, DamageKind::kPhysical, flags, 0.0f, 0.0f, nullptr, MitigationLabel::kBlocked, weaponID, {}, claim.suppressPopup);
 			return;
 		}
 
@@ -567,8 +577,15 @@ namespace FDNG
 			mitigated *= amount / hitTotalDamage;
 		}
 
+		if (flags.critical) {
+			extras.critBonus = WeaponCritBonus(attacker, a_victim, weaponID);
+		}
+		if (sneakMult > 1.0f) {
+			const float withoutCrit = std::max(physicalDamage - extras.critBonus, 0.0f);
+			extras.sneakBonus = withoutCrit * (1.0f - 1.0f / sneakMult);
+		}
 		AuditRecord(a_raw.victimID, a_raw.amount);
-		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel, weaponID, claim.suppressPopup);
+		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel, weaponID, extras, claim.suppressPopup);
 	}
 
 	void Capture::ProcessAVDelta(const RawEvent& a_raw, RE::Actor* a_victim)
@@ -742,7 +759,7 @@ namespace FDNG
 	}
 
 	void Capture::EmitDamage(RE::Actor* a_victim, RE::Actor* a_attacker, float a_amount, DamageKind a_kind, const HitFlags& a_flags, float a_mitigated,
-		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel, RE::FormID a_sourceID,
+		float a_ampMult, const char* a_location, MitigationLabel a_mitLabel, RE::FormID a_sourceID, const HitExtras& a_extras,
 		bool a_suppressPopup)
 	{
 		const auto settings = Settings::GetSingleton();
@@ -770,6 +787,7 @@ namespace FDNG
 		event.kind = a_kind;
 		event.origin = origin;
 		event.flags = a_flags;
+		event.extras = a_extras;
 
 		if (!settings->enableFloatingDamage) {
 			return;
@@ -799,12 +817,40 @@ namespace FDNG
 		}
 
 		if (settings->debugLog) {
-			logger::debug("Damage: victim={:08X} amount={:.1f} kind={} origin={} crit={}",
+			logger::debug("Damage: victim={:08X} amount={:.1f} kind={} origin={} crit={} critBonus={:.1f} sneakBonus={:.1f} reflected={:.1f}",
 				event.victimID, event.amount, std::to_underlying(event.kind),
-				std::to_underlying(event.origin), event.flags.critical);
+				std::to_underlying(event.origin), event.flags.critical, event.extras.critBonus, event.extras.sneakBonus, event.extras.reflected);
 		}
 
 		NumberManager::GetSingleton()->Enqueue(event);
+
+		for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+			const auto shown = ExtraShownValue(kExtraTable[i], event.flags, event.extras);
+			if (settings->extraDisplay[i] != ExtraDisplay::kSeparate || shown < 1) {
+				continue;
+			}
+			DamageEvent info = event;
+			info.amount = static_cast<float>(shown);
+			info.mitigated = 0.0f;
+			info.ampMult = 0.0f;
+			info.location[0] = '\0';
+			info.flags = HitFlags{};
+			info.extras = HitExtras{};
+			info.extraIndex = static_cast<int>(i);
+			NumberManager::GetSingleton()->Enqueue(info);
+		}
+	}
+
+	float Capture::WeaponCritBonus(RE::Actor* a_attacker, RE::Actor* a_victim, RE::FormID a_weaponID)
+	{
+		const auto weapon = a_weaponID ? RE::TESForm::LookupByID<RE::TESObjectWEAP>(a_weaponID) : nullptr;
+		if (!weapon || !a_attacker) {
+			return 0.0f;
+		}
+		float bonus = static_cast<float>(weapon->criticalData.damage);
+		RE::BGSEntryPoint::HandleEntryPoint(RE::BGSEntryPoint::ENTRY_POINT::kCalculateMyCriticalHitDamage,
+			a_attacker, weapon, a_victim, &bonus);
+		return std::max(bonus, 0.0f);
 	}
 
 	void Capture::RecordTrace(TraceEntry a_entry)

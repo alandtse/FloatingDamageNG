@@ -347,6 +347,14 @@ namespace FDNG::UI
 				Tip("Hostile drains only (frost spells, absorb effects). Sprinting and power attacks never show.");
 				ImGuiMCP::Checkbox("Mitigation subtext", &s->showMitigation);
 				Tip("The small \"(-45 armor)\" / \"(-20 resisted)\" line under a number.");
+				for (std::size_t i = 0; i < kExtraTable.size(); ++i) {
+					int mode = static_cast<int>(s->extraDisplay[i]);
+					const char* modes[] = { "Off", "Under the number", "Separate number" };
+					if (ImGuiMCP::Combo(kExtraTable[i].uiLabel, &mode, modes, 3, -1)) {
+						s->extraDisplay[i] = static_cast<ExtraDisplay>(mode);
+					}
+					Tip(kExtraTable[i].uiTip);
+				}
 				ImGuiMCP::Checkbox("Hit location tags", &s->showHitLocation);
 				Tip("HEADSHOT etc. on bow/crossbow hits, from where the arrow actually struck.");
 				ImGuiMCP::SliderFloat("NPC visibility radius (m)", &s->maxVisibilityRadiusMeters, 5.0f, 100.0f, "%.0f", 0);
@@ -646,7 +654,21 @@ namespace FDNG::UI
 				ImGuiMCP::Checkbox("Export CSV", &s->exportCsv);
 				Tip("One row per combatant per session to FloatingDamageNG-combatants.csv - for Excel/Sheets.");
 				ImGuiMCP::Checkbox("Live DPS readout", &s->enableLiveDPSWindow);
-				Tip("Small combat overlay: top-right on flat, head-locked HUD plane in VR.");
+				Tip("Small combat overlay on screen (head-locked HUD plane in VR): damage, time and DPS, plus the options below.");
+				ImGuiMCP::BeginDisabled(!s->enableLiveDPSWindow);
+				ImGuiMCP::Checkbox("  Show damage taken", &s->hudShowTaken);
+				ImGuiMCP::Checkbox("  Show hits / crit rate / biggest hit", &s->hudShowHits);
+				ImGuiMCP::SliderInt("  Top damage dealers", &s->hudTopRows, 0, 5, "%d", 0);
+				Tip("How many combatants to list by damage dealt. 0 hides the list.");
+				ImGuiMCP::SliderFloat("  Recap hold (s)", &s->hudRecapHoldSeconds, 0.0f, 30.0f, "%.0f", 0);
+				Tip("After combat ends the panel becomes a recap that stays fully visible this long, then fades out.");
+				static const char* kCorners[] = { "Top right", "Top left", "Bottom right", "Bottom left" };
+				ImGuiMCP::Combo("  Screen corner", &s->hudCorner, kCorners, 4, -1);
+				ImGuiMCP::SliderFloat("  Text size", &s->hudFontScale, 0.75f, 2.0f, "%.2fx", 0);
+				Tip("Scales the panel text. It uses your chosen default damage font.");
+				ImGuiMCP::Checkbox("  Color-code stats", &s->hudColorStats);
+				Tip("Tints damage taken, healing and kills, and colors the top dealers by you, followers and enemies.");
+				ImGuiMCP::EndDisabled();
 				ImGuiMCP::Checkbox("Include followers in reports", &s->logFollowerPerformance);
 				if (ImGuiMCP::Checkbox("devbench integration", &s->enableDevBench) && s->enableDevBench) {
 					DevBench::Connect();
