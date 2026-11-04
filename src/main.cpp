@@ -39,6 +39,7 @@ namespace
 			FDNG::DevBench::Connect();
 			break;
 		case SKSE::MessagingInterface::kDataLoaded:
+			FDNG::Hooks::InstallEvade();  // late, so it wraps dodge mods that patched the site earlier
 			FDNG::Capture::GetSingleton()->Register();
 			FDNG::CombatLog::GetSingleton()->Register();
 			FDNG::UI::Register();

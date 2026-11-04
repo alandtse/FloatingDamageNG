@@ -4,6 +4,7 @@
 #include "Capture.h"
 
 #include "CombatLog.h"
+#include "Hooks.h"
 #include "NumberManager.h"
 #include "Settings.h"
 
@@ -396,8 +397,37 @@ namespace FDNG
 
 	// ---- Main-thread processing --------------------------------------------
 
+	void Capture::OnEvade(const char* a_source)
+	{
+		constexpr std::int64_t kEvadeCoalesceMs = 400;
+		const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+		auto last = _lastEvadeTicks.load(std::memory_order_relaxed);
+		if (now - last < kEvadeCoalesceMs || !_lastEvadeTicks.compare_exchange_strong(last, now, std::memory_order_relaxed)) {
+			return;
+		}
+		if (Settings::GetSingleton()->debugLog) {
+			logger::debug("Evade: ghost check at the {} site", a_source);
+		}
+		_evadePending.store(true, std::memory_order_release);
+	}
+
 	void Capture::ProcessQueued()
 	{
+		Hooks::VerifyEvade();
+		if (_evadePending.exchange(false, std::memory_order_acq_rel)) {
+			const auto settings = Settings::GetSingleton();
+			if (const auto player = RE::PlayerCharacter::GetSingleton(); player && settings->showEvade && settings->enableFloatingDamage) {
+				DamageEvent event;
+				event.victimID = player->GetFormID();
+				event.anchor = GetAnchorPos(player);
+				event.origin = OriginTier::kPlayerVictim;
+				std::snprintf(event.customText, sizeof(event.customText), "Evade");
+				event.useColor = true;
+				event.colorRGB = settings->colorEvade;
+				NumberManager::GetSingleton()->Enqueue(event);
+			}
+		}
+
 		std::array<RawEvent, kRawCapacity> batch;
 		std::size_t count = 0;
 		{

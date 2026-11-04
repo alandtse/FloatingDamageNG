@@ -53,6 +53,7 @@ namespace FDNG
 		}
 
 		enableFloatingDamage = ini.GetBoolValue("CoreFilters", "bEnableFloatingDamage", enableFloatingDamage);
+		showEvade = ini.GetBoolValue("CoreFilters", "bShowEvade", showEvade);
 		showPlayerDamageDealt = ini.GetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
 		showFollowerDamageDealt = ini.GetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
 		showNPCOnNPCDamage = ini.GetBoolValue("CoreFilters", "bShowNPCOnNPCDamage", showNPCOnNPCDamage);
@@ -206,6 +207,7 @@ namespace FDNG
 		}
 
 		ini.SetBoolValue("CoreFilters", "bEnableFloatingDamage", enableFloatingDamage);
+		ini.SetBoolValue("CoreFilters", "bShowEvade", showEvade);
 		ini.SetBoolValue("CoreFilters", "bShowPlayerDamageDealt", showPlayerDamageDealt);
 		ini.SetBoolValue("CoreFilters", "bShowFollowerDamageDealt", showFollowerDamageDealt);
 		ini.SetBoolValue("CoreFilters", "bShowNPCOnNPCDamage", showNPCOnNPCDamage);

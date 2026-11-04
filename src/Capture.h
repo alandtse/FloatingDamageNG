@@ -123,6 +123,9 @@ namespace FDNG
 		// that hit's processing and expires on its own.
 		void ClaimHit(RE::FormID a_victimID, HitClaim a_claim);
 
+		// A melee or projectile hit on the player negated by i-frames; any thread, coalesced.
+		void OnEvade(const char* a_source);
+
 		// Main thread (render tick): drain and process the raw queue.
 		void ProcessQueued();
 
@@ -333,6 +336,9 @@ namespace FDNG
 		std::mutex _rawLock;
 		std::array<RawEvent, kRawCapacity> _raw{};
 		std::size_t _rawCount{ 0 };
+
+		std::atomic<bool> _evadePending{ false };
+		std::atomic<std::int64_t> _lastEvadeTicks{ 0 };
 
 		std::mutex _lock;  // guards the maps below (event sink writes off-main)
 		std::unordered_map<RE::FormID, PendingHit> _pendingHits;

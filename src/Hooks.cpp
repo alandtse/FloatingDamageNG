@@ -183,6 +183,85 @@ namespace FDNG::Hooks
 		};
 	}
 
+	namespace
+	{
+		constexpr std::array<const char*, 1> kSiteNames{ "melee/projectile" };
+
+		// Dodge mods wrap this call as `orig(a) || ownCheck(a)`, so we must wrap last
+		// (install late) to see their result; the engine bails before any HitData exists.
+		template <int Site>
+		struct IsGhostSite
+		{
+			static bool thunk(RE::Actor* a_victim)
+			{
+				const bool ghost = func(a_victim);
+				if (ghost && a_victim == RE::PlayerCharacter::GetSingleton()) {
+					Capture::GetSingleton()->OnEvade(kSiteNames[Site]);
+				}
+				return ghost;
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
+		constexpr int kMeleeSite = 0;
+		constexpr std::uintptr_t kVrMeleeSiteRva = 0x631b35;
+
+		struct InstalledSite
+		{
+			std::uintptr_t site{ 0 };
+			std::uintptr_t stub{ 0 };
+		};
+		std::array<InstalledSite, 1> g_evadeSites;
+		bool g_evadeVerified{ false };
+
+		std::uintptr_t CallDestination(std::uintptr_t a_site)
+		{
+			if (*reinterpret_cast<const std::uint8_t*>(a_site) != 0xE8) {
+				return 0;
+			}
+			const auto rel = *reinterpret_cast<const std::int32_t*>(a_site + 1);
+			return a_site + 5 + rel;
+		}
+
+		template <int Site, class Thunk>
+		void InstallSite(std::uintptr_t a_site)
+		{
+			const auto bytes = reinterpret_cast<const std::uint8_t*>(a_site);
+			if (!CallDestination(a_site) || bytes[5] != 0x84 || bytes[6] != 0xC0) {
+				logger::warn("Evade hook skipped: unexpected bytes at the {} ghost-check site.", kSiteNames[Site]);
+				return;
+			}
+			stl::write_thunk_call<Thunk>(a_site);
+			g_evadeSites[Site] = { a_site, CallDestination(a_site) };
+			logger::info("Evade hook installed ({} ghost check).", kSiteNames[Site]);
+		}
+	}
+
+	void InstallEvade()
+	{
+		if (!Settings::GetSingleton()->showEvade) {
+			return;
+		}
+		// VR has one build, so it uses fixed RVAs instead of address-library IDs.
+		const bool vr = REL::Module::IsVR();
+		InstallSite<kMeleeSite, IsGhostSite<kMeleeSite>>(
+			vr ? REL::Offset(kVrMeleeSiteRva).address() : REL::Relocation<std::uintptr_t>{ RELOCATION_ID(37673, 38627), OFFSET(0x45, 0x47) }.address());
+	}
+
+	void VerifyEvade()
+	{
+		if (g_evadeVerified) {
+			return;
+		}
+		g_evadeVerified = true;
+		for (std::size_t i = 0; i < g_evadeSites.size(); ++i) {
+			const auto& s = g_evadeSites[i];
+			if (s.site && CallDestination(s.site) != s.stub) {
+				logger::warn("Evade hook: another plugin re-patched the {} ghost-check site after us; mod-granted i-frames may not show \"Evade\".", kSiteNames[i]);
+			}
+		}
+	}
+
 	void Install()
 	{
 		HandleHealthDamage<RE::Character>::Install();
