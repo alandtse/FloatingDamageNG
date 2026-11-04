@@ -14,6 +14,7 @@ namespace FDNG
 		// Windows never maps the first 64 KiB of a process's address space, so
 		// any real Actor* is guaranteed to be >= this.
 		constexpr std::uintptr_t kMinValidUserAddress = 0x10000;
+		constexpr float kMinHitTotalDamage = 0.01f;
 
 		RE::NiPoint3 GetAnchorPos(RE::Actor* a_actor)
 		{
@@ -181,6 +182,7 @@ namespace FDNG
 		PendingHit pending;
 		pending.stamp = Clock::now();
 		pending.physicalDamage = a_hitData.physicalDamage;
+		pending.totalDamage = a_hitData.totalDamage;
 		pending.resistedPhysical = std::max(0.0f, a_hitData.resistedPhysicalDamage);
 		pending.resistedTyped = std::max(0.0f, a_hitData.resistedTypedDamage);
 		pending.weaponID = a_hitData.weapon ? a_hitData.weapon->GetFormID() : 0;
@@ -331,7 +333,7 @@ namespace FDNG
 		QueueRaw(raw);
 	}
 
-	void Capture::OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue)
+	void Capture::OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue, float a_appliedHealth)
 	{
 		if (!a_effect || !a_target) {
 			return;
@@ -343,6 +345,9 @@ namespace FDNG
 		raw.av = a_actorValue != RE::ActorValue::kNone ? a_actorValue : a_effect->actorValue;
 		raw.victimID = a_target->GetFormID();
 		raw.amount = a_value;
+		if (raw.av == RE::ActorValue::kHealth && a_value < 0.0f) {
+			raw.amount = a_appliedHealth;
+		}
 		if (raw.amount == 0.0f) {
 			return;  // zero applies carry no display information (see ProcessEffect)
 		}
@@ -417,6 +422,7 @@ namespace FDNG
 		bool ranged = false;
 		RE::FormID weaponID = 0;
 		RE::NiPoint3 hitPos;
+		float hitTotalDamage = 0.0f;
 		{
 			std::scoped_lock lk{ _lock };
 			if (const auto it = _pendingHits.find(a_raw.victimID);
@@ -434,6 +440,7 @@ namespace FDNG
 				ranged = it->second.ranged;
 				weaponID = it->second.weaponID;
 				hitPos = it->second.hitPos;
+				hitTotalDamage = it->second.totalDamage;
 				_pendingHits.erase(it);
 			}
 		}
@@ -468,6 +475,10 @@ namespace FDNG
 		}
 
 		const auto attacker = a_raw.attackerID ? RE::TESForm::LookupByID<RE::Actor>(a_raw.attackerID) : nullptr;
+		if (hitTotalDamage > kMinHitTotalDamage) {
+			mitigated *= amount / hitTotalDamage;
+		}
+
 		AuditRecord(a_raw.victimID, a_raw.amount);
 		EmitDamage(a_victim, attacker, amount, DamageKind::kPhysical, flags, mitigated, ampMult, location, mitLabel, weaponID);
 	}

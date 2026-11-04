@@ -81,7 +81,8 @@ namespace FDNG
 		void OnHealthRestore(RE::Actor* a_target, float a_amount);
 		void OnMagicDamage(RE::Actor* a_victim, float a_amount);
 		void OnResourceDamage(RE::Actor* a_victim, RE::ActorValue a_value, float a_amount);
-		void OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue);
+		// a_appliedHealth: health delta (negative) the engine applied during this effect; used for health damage in place of a_value.
+		void OnEffectModify(RE::ValueModifierEffect* a_effect, RE::Actor* a_target, float a_value, RE::ActorValue a_actorValue, float a_appliedHealth);
 
 		// From the hit-dispatch thunk: stash per-victim hit metadata so the
 		// matching weapon-hit event can consume it (POD only).
@@ -127,6 +128,7 @@ namespace FDNG
 			float resistedPhysical{ 0.0f };  // armor
 			float resistedTyped{ 0.0f };     // enchant payload resisted
 			float blockedDamage{ 0.0f };     // reconstructed from percentBlocked
+			float totalDamage{ 0.0f };       // passed to DamageHealth, before the difficulty multiplier
 			float ampMult{ 0.0f };
 			bool ranged{ false };  // bow/crossbow hit — locational + amplification apply
 			HitFlags flags;
