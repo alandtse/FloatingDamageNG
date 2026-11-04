@@ -29,6 +29,11 @@ namespace FDNG::Hooks
 		thread_local float t_effectAppliedHealth = 0.0f;
 		thread_local const RE::Actor* t_effectTarget = nullptr;
 
+		// Set while the engine runs a health-damage ModActorValue that was
+		// already queued, so the HandleHealthDamage it dispatches from inside
+		// is not queued a second time.
+		thread_local int t_inModActorValue = 0;
+
 		template <class TActor>
 		struct HandleHealthDamage
 		{
@@ -37,7 +42,7 @@ namespace FDNG::Hooks
 				// Effect ticks re-enter here nested inside ModifyActorValue;
 				// the effect hook already captured them with better
 				// attribution, so only genuine weapon blows queue.
-				if (t_inEffectModify == 0) {
+				if (t_inEffectModify == 0 && t_inModActorValue == 0) {
 					Capture::GetSingleton()->OnHealthDamage(a_this, a_attacker, a_damage);
 				} else if (a_this == t_effectTarget && a_damage < 0.0f) {
 					t_effectAppliedHealth += a_damage;
@@ -68,6 +73,7 @@ namespace FDNG::Hooks
 		{
 			static void thunk(RE::ActorValueOwner* a_this, RE::ACTOR_VALUE_MODIFIER a_modifier, RE::ActorValue a_value, float a_amount)
 			{
+				bool queuedHealthDamage = false;
 				if (a_modifier == RE::ACTOR_VALUE_MODIFIER::kDamage && t_inEffectModify == 0) {
 					// Ghidra-verified (disassembly of the engine's own ModActorValue body):
 					// SE and VR share this this-adjustment; AE alone diverges - not the
@@ -81,6 +87,7 @@ namespace FDNG::Hooks
 							// Health damage that skipped HandleHealthDamage —
 							// the magic / DoT / script path.
 							Capture::GetSingleton()->OnMagicDamage(actor, -a_amount);
+							queuedHealthDamage = true;
 						}
 					} else if (a_amount < 0.0f &&
 							   ((a_value == RE::ActorValue::kMagicka && settings->showMagickaDamage) ||
@@ -88,7 +95,9 @@ namespace FDNG::Hooks
 						Capture::GetSingleton()->OnResourceDamage(actor, a_value, -a_amount);
 					}
 				}
+				t_inModActorValue += queuedHealthDamage;
 				func(a_this, a_modifier, a_value, a_amount);
+				t_inModActorValue -= queuedHealthDamage;
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 
