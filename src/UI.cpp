@@ -337,7 +337,7 @@ namespace FDNG::UI
 				Tip("Fights you aren't part of. Rendered smaller with the NPC marker color, hidden beyond the visibility radius.");
 				ImGuiMCP::Checkbox("Damage you take", &s->showPlayerDamageTaken);
 				ImGuiMCP::Checkbox("\"Evade\" on dodge i-frames", &s->showEvade);
-				Tip("Shows \"Evade\" when your dodge mod's invincibility frames negate a melee, projectile or spell hit. Needs a restart to take effect.");
+				Tip("Shows \"Evade\" when your dodge mod's invincibility frames negate a melee or projectile hit. Needs a restart to take effect.");
 				ImGuiMCP::Checkbox("Player numbers in first person", &s->showFirstPersonNumbers);
 				Tip("Pinned to a screen spot on flat, anchored ahead of you in VR. Off = hidden while in first person.");
 				ImGuiMCP::Checkbox("Healing", &s->showHealing);
