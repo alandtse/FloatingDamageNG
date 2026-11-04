@@ -30,6 +30,11 @@ namespace FDNG
 		HitFlags flags;
 		HitExtras extras;
 		int extraIndex{ kNoExtra };
+		bool custom{ false };  // API popup: `text` is caller-supplied and never rebuilt or merged
+		bool pinned{ false };  // anchor is world-fixed; not re-anchored to the victim's head
+		bool useColor{ false };
+		std::uint32_t colorRGB{ 0 };
+		float scale{ 1.0f };
 		char text[28]{};     // "104" / "CRIT 104" / "HEADSHOT 104"
 		char subtext[64]{};  // "(-45 resisted) x2.5 +12 crit +30 sneak 8 reflected"
 	};

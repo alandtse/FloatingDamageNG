@@ -24,6 +24,16 @@ namespace FDNG::Hooks
 		// write must not be recorded again by the ModActorValue fallback.
 		thread_local int t_inEffectModify = 0;
 
+		// The effect's magnitude is pre-difficulty and pre-clamp; the nested
+		// HandleHealthDamage reports the health actually applied.
+		thread_local float t_effectAppliedHealth = 0.0f;
+		thread_local const RE::Actor* t_effectTarget = nullptr;
+
+		// Set while the engine runs a health-damage ModActorValue that was
+		// already queued, so the HandleHealthDamage it dispatches from inside
+		// is not queued a second time.
+		thread_local int t_inModActorValue = 0;
+
 		template <class TActor>
 		struct HandleHealthDamage
 		{
@@ -32,8 +42,10 @@ namespace FDNG::Hooks
 				// Effect ticks re-enter here nested inside ModifyActorValue;
 				// the effect hook already captured them with better
 				// attribution, so only genuine weapon blows queue.
-				if (t_inEffectModify == 0) {
+				if (t_inEffectModify == 0 && t_inModActorValue == 0) {
 					Capture::GetSingleton()->OnHealthDamage(a_this, a_attacker, a_damage);
+				} else if (a_this == t_effectTarget && a_damage < 0.0f) {
+					t_effectAppliedHealth += a_damage;
 				}
 				++t_inHandleHealthDamage;
 				func(a_this, a_attacker, a_damage);
@@ -61,6 +73,7 @@ namespace FDNG::Hooks
 		{
 			static void thunk(RE::ActorValueOwner* a_this, RE::ACTOR_VALUE_MODIFIER a_modifier, RE::ActorValue a_value, float a_amount)
 			{
+				bool queuedHealthDamage = false;
 				if (a_modifier == RE::ACTOR_VALUE_MODIFIER::kDamage && t_inEffectModify == 0) {
 					// Ghidra-verified (disassembly of the engine's own ModActorValue body):
 					// SE and VR share this this-adjustment; AE alone diverges - not the
@@ -74,6 +87,7 @@ namespace FDNG::Hooks
 							// Health damage that skipped HandleHealthDamage —
 							// the magic / DoT / script path.
 							Capture::GetSingleton()->OnMagicDamage(actor, -a_amount);
+							queuedHealthDamage = true;
 						}
 					} else if (a_amount < 0.0f &&
 							   ((a_value == RE::ActorValue::kMagicka && settings->showMagickaDamage) ||
@@ -81,7 +95,9 @@ namespace FDNG::Hooks
 						Capture::GetSingleton()->OnResourceDamage(actor, a_value, -a_amount);
 					}
 				}
+				t_inModActorValue += queuedHealthDamage;
 				func(a_this, a_modifier, a_value, a_amount);
+				t_inModActorValue -= queuedHealthDamage;
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 
@@ -102,10 +118,17 @@ namespace FDNG::Hooks
 		{
 			static void thunk(RE::ValueModifierEffect* a_this, RE::Actor* a_actor, float a_value, RE::ActorValue a_actorValue)
 			{
+				const auto outerTarget = t_effectTarget;
+				const float outerApplied = t_effectAppliedHealth;
+				t_effectTarget = a_actor;
+				t_effectAppliedHealth = 0.0f;
 				++t_inEffectModify;
 				func(a_this, a_actor, a_value, a_actorValue);
 				--t_inEffectModify;
-				Capture::GetSingleton()->OnEffectModify(a_this, a_actor, a_value, a_actorValue);
+				const float appliedHealth = t_effectAppliedHealth;
+				t_effectTarget = outerTarget;
+				t_effectAppliedHealth = outerApplied;
+				Capture::GetSingleton()->OnEffectModify(a_this, a_actor, a_value, a_actorValue, appliedHealth);
 
 				// Dual-value effects (vanilla frost/shock) apply their
 				// secondary AV through a DIRECT call to the base worker inside
@@ -118,7 +141,7 @@ namespace FDNG::Hooks
 				if (const auto dual = skyrim_cast<RE::DualValueModifierEffect*>(a_this)) {
 					const auto secondaryAV = dual->GetAdditionalActorValue();
 					if (secondaryAV != RE::ActorValue::kNone) {
-						Capture::GetSingleton()->OnEffectModify(a_this, a_actor, a_value * dual->GetSecondaryAVWeight(), secondaryAV);
+						Capture::GetSingleton()->OnEffectModify(a_this, a_actor, a_value * dual->GetSecondaryAVWeight(), secondaryAV, 0.0f);
 					}
 				}
 			}

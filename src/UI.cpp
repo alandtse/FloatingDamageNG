@@ -604,6 +604,16 @@ namespace FDNG::UI
 				Tip("Filters natural health regen; real heals accumulate past it quickly.");
 				ImGuiMCP::SliderFloat("Merge window (s)", &s->dotAccumulationWindow, 0.1f, 2.0f, "%.2f", 0);
 				Tip("Repeat hits of the same type on one target within this window add into the existing number.");
+				int dot = static_cast<int>(s->dotDisplay);
+				const char* dotModes[] = { "One number per tick", "Running total" };
+				if (ImGuiMCP::Combo("Damage over time", &dot, dotModes, 2, -1)) {
+					s->dotDisplay = static_cast<DotDisplay>(dot);
+				}
+				Tip("Burning, poison and other effects that last: a number every tick interval, or one number that keeps growing.");
+				if (s->dotDisplay == DotDisplay::kPerTick) {
+					ImGuiMCP::SliderFloat("Tick interval (s)", &s->dotTickSeconds, 0.25f, 5.0f, "%.2f", 0);
+					Tip("How much of a damage-over-time effect each number covers.");
+				}
 			}
 
 			if (ImGuiMCP::CollapsingHeader("Colors and style", 0)) {

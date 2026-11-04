@@ -59,6 +59,12 @@ namespace FDNG
 		kNone = 3        // plain black outline, no origin color (don't show the source)
 	};
 
+	enum class DotDisplay : std::uint8_t
+	{
+		kPerTick = 0,
+		kSummed,
+	};
+
 	// Per-damage-kind metadata in DamageKind order — the single source of truth
 	// for the [PerType] INI key suffix and the menu label, so a kind's ordering
 	// and spelling live in one place instead of parallel arrays.
@@ -155,6 +161,8 @@ namespace FDNG
 		float minDamageToShow{ 1.0f };
 		float minHealToShow{ 5.0f };           // accumulation threshold; filters natural regen trickle
 		float dotAccumulationWindow{ 0.35f };  // merge same victim+type events younger than this
+		DotDisplay dotDisplay{ DotDisplay::kPerTick };
+		float dotTickSeconds{ 1.0f };
 
 		// [Style] — how a number's origin (whose fight it is) is marked. The
 		// fill color always encodes the damage kind, so origin uses a

@@ -10,6 +10,7 @@
 
 #include "pch.h"
 
+#include "Api.h"
 #include "Capture.h"
 #include "CombatLog.h"
 #include "DevBench.h"
@@ -29,6 +30,7 @@ namespace
 		switch (a_msg->type) {
 		case SKSE::MessagingInterface::kPostLoad:
 			FDNG::Settings::GetSingleton()->Load();
+			FDNG::Api::RegisterHandshake();
 			break;
 		case SKSE::MessagingInterface::kPostPostLoad:
 			FDNG::Hooks::Install();
