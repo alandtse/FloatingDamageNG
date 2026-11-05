@@ -941,6 +941,9 @@ namespace FDNG::UI
 			logger::info("SKSE Menu Framework not installed; in-game config UI disabled.");
 			return;
 		}
+		// The header caches the module handle in a static initialised when this DLL loads,
+		// which is null if SKSEMenuFramework.dll loads after us.
+		menuFramework = GetModuleHandle(L"SKSEMenuFramework");
 		SKSEMenuFramework::SetSection("Floating Damage NG");
 		SKSEMenuFramework::AddSectionItem("Numbers", RenderNumbers);
 		SKSEMenuFramework::AddSectionItem("Analytics & Debug", RenderAnalytics);
